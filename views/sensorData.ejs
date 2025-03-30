@@ -1,0 +1,608 @@
+<div class="container">
+  <h1>温度センサー監視システム</h1>
+  
+  <!-- Tab Navigation -->
+  <div class="tab-container">
+    <div class="tab-nav">
+      <button class="tab-button" id="sensorTabBtn" onclick="switchTab('sensorTab', this)">
+        <span class="tab-icon">📊</span>
+        <span>センサー状態</span>
+      </button>
+      <button class="tab-button" id="serverTabBtn" onclick="switchTab('serverTab', this)">
+        <span class="tab-icon">🖥️</span>
+        <span>サーバー情報</span>
+      </button>
+    </div>
+
+    <!-- Sensor Tab Content -->
+    <div id="sensorTab" class="tab-content">
+      <div class="sensor-panels">
+        <% latestReadings.forEach((sensor, index) => { %>
+          <div class="sensor-data-section" id="sensor-<%= sensor.sensorId %>">
+            <div class="sensor-header">
+              <h2 class="sensor-title">
+                <span class="sensor-icon">🌡️</span>
+                <%= sensor.sensorId %> センサー情報
+              </h2>
+              <div class="sensor-status <%= sensor.isActive ? 'active' : 'inactive' %>">
+                <%= sensor.isActive ? '稼働中' : '停止中' %>
+              </div>
+            </div>
+            
+            <!-- Raw Data History -->
+            <div class="sensor-data-section">
+             
+              <div class="section-controls">
+                <h3>取得データ履歴 <span class="data-count">(最新100件)</span></h3>
+                <button class="refresh-btn" onclick="refreshData('<%= sensor.sensorId %>')">
+                  <span class="refresh-icon">🔄</span>
+                </button>
+              </div>
+              <div class="table-wrapper">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>年月日</th>
+                      <th>時刻</th>
+                      <% for(let i = 1; i <= 16; i++) { %>
+                      <th><%= i %></th>
+                      <% } %>
+                      <th>平均温度</th>
+                      <th>状態</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-<%= sensor.sensorId %>">
+                    <% sensor.data.forEach(data => { %>
+                    <tr class="<%= data.isAbnormal ? 'table-danger' : '' %>">
+                      <td><%= data.acquisitionDate %></td>
+                      <td><%= data.acquisitionTime %></td>
+                      <% data.temperatures.forEach(temp => { %>
+                      <td><%= temp !== null ? temp.toFixed(1) : '--' %></td>
+                      <% }); %>
+                      <td><%= data.averageTemperature !== null ? data.averageTemperature.toFixed(1) : '--' %> °C</td>
+                      <td><%= data.isAbnormal ? '異常' : '正常' %></td>
+                    </tr>
+                    <% }); %>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+            <!-- Alert History -->
+            <div class="section-header history-section-header">
+              <h3>アラート履歴 <span class="data-count">(最新10件)</span></h3>
+              <button class="expand-btn" onclick="toggleTableExpand('alerts-<%= sensor.sensorId %>-wrapper')">
+                <span class="toggle-icon">⌄</span><span class="toggle-text">展開</span>
+              </button>
+            </div>
+            <div class="table-wrapper alert-table" id="alerts-<%= sensor.sensorId %>-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>取得日</th>
+                    <th>取得時刻</th>
+                    <th>アラート発生理由</th>
+                  </tr>
+                </thead>
+                <tbody id="alerts-<%= sensor.sensorId %>">
+                  <% (sensor.alerts || []).slice(0, 10).forEach(alert => { %>
+                  <tr class="<%= alert.eventType?.includes('RECOVERY') ? 'alert-recovery' : 'alert-row' %>">
+                    <td><%= alert.date || '-' %></td>
+                    <td><%= alert.time || '-' %></td>
+                    <td><%= alert.event || '-' %></td>
+                  </tr>
+                  <% }); %>
+                  <% if ((sensor.alerts || []).length === 0) { %>
+                    <tr class="empty-table-row">
+                      <td colspan="3">アラート履歴はありません</td>
+                    </tr>
+                  <% } %>
+                </tbody>
+              </table>
+            </div>
+            
+            <!-- Settings History -->
+            <div class="section-header history-section-header">
+              <h3>設定変更履歴 <span class="data-count">(最新10件)</span></h3>
+              <button class="expand-btn" onclick="toggleTableExpand('settings-<%= sensor.sensorId %>-wrapper')">
+                <span class="toggle-icon">⌄</span><span class="toggle-text">展開</span>
+              </button>
+            </div>
+            <div class="table-wrapper settings-table" id="settings-<%= sensor.sensorId %>-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>日付</th>
+                    <th>時刻</th>
+                    <th>設定内容</th>
+                  </tr>
+                </thead>
+                <tbody id="settings-<%= sensor.sensorId %>">
+                  <% (sensor.settings || []).forEach(setting => { %>
+                  <tr>
+                    <td><%= setting.date || '-' %></td>
+                    <td><%= setting.time || '-' %></td>
+                    <td><%= setting.content || '-' %></td>
+                  </tr>
+                  <% }); %>
+                  <% if ((sensor.settings || []).length === 0) { %>
+                    <tr class="empty-table-row">
+                      <td colspan="3">設定変更履歴はありません</td>
+                    </tr>
+                  <% } %>
+                </tbody>
+              </table>
+            </div>
+            
+            <!-- Personality History -->
+            <div class="section-header history-section-header">
+              <h3>個性（バイアス）履歴 <span class="data-count">(最新10件)</span></h3>
+              <button class="expand-btn" onclick="toggleTableExpand('personality-<%= sensor.sensorId %>-wrapper')">
+                <span class="toggle-icon">⌄</span><span class="toggle-text">展開</span>
+              </button>
+            </div>
+            <div class="table-wrapper personality-table" id="personality-<%= sensor.sensorId %>-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>日付</th>
+                    <th>時刻</th>
+                    <th>バイアス設定</th>
+                  </tr>
+                </thead>
+                <tbody id="personality-<%= sensor.sensorId %>">
+                  <% (sensor.personality || []).forEach(item => { %>
+                  <tr>
+                    <td><%= item.date || '-' %></td>
+                    <td><%= item.time || '-' %></td>
+                    <td><%= item.content || '-' %></td>
+                  </tr>
+                  <% }); %>
+                  <% if ((sensor.personality || []).length === 0) { %>
+                    <tr class="empty-table-row">
+                      <td colspan="3">バイアス設定履歴はありません</td>
+                    </tr>
+                  <% } %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+    </div>
+
+    <!-- Server Tab Content -->
+    <div id="serverTab" class="tab-content">
+      <h2 class="server-title">サーバー情報</h2>
+      
+      <div class="server-stats">
+        <!-- System Status Card -->
+        <div class="stat-card system-status">
+          <div class="stat-header">
+            <h3 class="stat-title">
+              <span class="stat-icon">⚡</span>
+              システム状態
+            </h3>
+            <span class="last-updated" id="status-last-updated">最終更新: <%= serverStats.lastUpdateTime ? new Date(serverStats.lastUpdateTime).toLocaleString('ja-JP') : '-' %></span>
+          </div>
+          <div class="stat-content" id="system-status">
+            <table class="data-table status-table">
+              <tr>
+                <th>MongoDB接続状態</th>
+                <td id="mongodb-status">接続中</td>
+              </tr>
+              <tr>
+                <th>センサー数</th>
+                <td id="sensor-count"><%= serverStats.totalSensors %></td>
+              </tr>
+              <tr>
+                <th>アクティブセンサー</th>
+                <td id="active-sensors"><%= serverStats.activeSensors %></td>
+              </tr>
+              <tr>
+                <th>最終データ受信</th>
+                <td id="last-data-received"><%= serverStats.lastUpdateTime ? new Date(serverStats.lastUpdateTime).toLocaleString('ja-JP', {
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit'
+                }) : '-' %></td>
+              </tr>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Function to update sensor status
+  function updateSensorStatus(sensorId, isActive) {
+    const statusElement = document.querySelector(`#sensor-${sensorId} .sensor-status`);
+    if (statusElement) {
+      statusElement.className = `sensor-status ${isActive ? 'active' : 'inactive'}`;
+      statusElement.textContent = isActive ? '稼働中' : '停止中';
+    }
+  }
+
+  // Function to update sensor data display
+  function updateSensorData(data) {
+    if (!data || !data.sensorId) return;
+    
+    const tbody = document.getElementById(`tbody-${data.sensorId}`);
+    if (!tbody) return;
+    
+    // Update sensor status
+    updateSensorStatus(data.sensorId, data.isActive);
+    
+    // Create a new row for the data
+    const row = document.createElement('tr');
+    row.className = data.isAbnormal ? 'table-danger' : '';
+    
+    // Format date and time
+    const date = new Date(data.timestamp);
+    const formattedDate = date.toLocaleDateString('ja-JP', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).replace(/\//g, '-');
+    
+    const formattedTime = date.toLocaleTimeString('ja-JP', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    
+    // Create row content
+    let rowHTML = `
+      <td>${formattedDate}</td>
+      <td>${formattedTime}</td>
+    `;
+    
+    // Add the 16 temperature readings
+    if (data.temperatures && Array.isArray(data.temperatures)) {
+      data.temperatures.forEach(temp => {
+        rowHTML += `<td>${typeof temp === 'number' ? temp.toFixed(1) : '--'}</td>`;
+      });
+      // Fill remaining slots if less than 16 readings
+      for (let i = data.temperatures.length; i < 16; i++) {
+        rowHTML += '<td>--</td>';
+      }
+    } else {
+      // If no temperature data, fill all 16 slots with placeholder
+      for (let i = 0; i < 16; i++) {
+        rowHTML += '<td>--</td>';
+      }
+    }
+    
+    // Add average temperature and status
+    const avgTemp = data.temperatures ? 
+      (data.temperatures.reduce((sum, temp) => sum + (typeof temp === 'number' ? temp : 0), 0) / data.temperatures.length).toFixed(1) :
+      '--';
+    
+    rowHTML += `
+      <td>${avgTemp} °C</td>
+      <td>${data.isAbnormal ? '異常' : '正常'}</td>
+    `;
+    
+    row.innerHTML = rowHTML;
+    
+    // Add to the beginning of the table
+    tbody.insertBefore(row, tbody.firstChild);
+    
+    // Keep only the latest 100 rows
+    while (tbody.children.length > 100) {
+      tbody.removeChild(tbody.lastChild);
+    }
+  }
+  
+  // Function to handle the refresh button click
+  function refreshData(sensorId) {
+    // Get the refresh button and add the spinning class
+    const refreshBtn = event.currentTarget;
+    refreshBtn.classList.add('spinning');
+    
+    // Fetch the latest data for the specific sensor
+    fetch(`/api/sensor-data/${sensorId}/latest`)
+      .then(response => response.json())
+      .then(data => {
+        if (data) {
+          // Clear existing table data
+          const tbody = document.getElementById(`tbody-${sensorId}`);
+          if (tbody) {
+            tbody.innerHTML = '';
+          }
+          // Update with new data
+          if (Array.isArray(data)) {
+            data.forEach(item => {
+              if (item) updateSensorData(item);
+            });
+          } else {
+            updateSensorData(data);
+          }
+          console.log(`Data refreshed for sensor ${sensorId}`);
+        }
+      })
+      .catch(error => console.error(`Error refreshing sensor data (${sensorId}):`, error))
+      .finally(() => {
+        // Remove the spinning class after a short delay for visual feedback
+        setTimeout(() => {
+          refreshBtn.classList.remove('spinning');
+        }, 500);
+      });
+  }
+  
+  // Function to handle alert updates
+  function handleAlert(data) {
+    if (!data || !data.sensorId) return;
+    
+    const alertsTable = document.getElementById(`alerts-${data.sensorId}`);
+    if (!alertsTable) return;
+    
+    // Create a new row for the alert
+    const row = document.createElement('tr');
+    row.className = data.eventType && data.eventType.includes('RECOVERY') ? 'alert-recovery' : 'alert-row';
+    
+    // Create row content
+    row.innerHTML = `
+      <td>${data.date || '-'}</td>
+      <td>${data.time || '-'}</td>
+      <td>${data.event || '-'}</td>
+    `;
+    
+    // Add to the beginning of the table
+    alertsTable.insertBefore(row, alertsTable.firstChild);
+    
+    // Keep only the latest 10 rows
+    while (alertsTable.children.length > 10) {
+      alertsTable.removeChild(alertsTable.lastChild);
+    }
+  }
+  
+  // Function to handle settings updates
+  function handleSettingChange(data) {
+    if (!data || !data.sensorId) return;
+    
+    const settingsTable = document.getElementById(`settings-${data.sensorId}`);
+    if (!settingsTable) return;
+    
+    // Format the content
+    let content = data.content;
+    if (!content && data.changeType) {
+      if (data.changeType === 'threshold' && data.value) {
+        const { high, low } = data.value;
+        content = `しきい値（高: ${high}°C / 低: ${low}°C）`;
+      } else if (data.changeType === 'interval' && data.value) {
+        content = `読取間隔変更: ${data.value}ms`;
+      } else {
+        content = `${data.changeType}の設定変更`;
+      }
+    }
+    
+    // Create a new row
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${data.date || '-'}</td>
+      <td>${data.time || '-'}</td>
+      <td>${content || '-'}</td>
+    `;
+    
+    // Add to the beginning of the table
+    settingsTable.insertBefore(row, settingsTable.firstChild);
+  }
+  
+  // Function to handle personality updates
+  function handlePersonalityUpdate(data) {
+    if (!data || !data.sensorId) return;
+    
+    const personalityTable = document.getElementById(`personality-${data.sensorId}`);
+    if (!personalityTable) return;
+    
+    // Format the content
+    let content = data.content;
+    if (!content && data.biasType) {
+      if (data.biasType === 'temperature_offset' && data.biasValue) {
+        const offset = data.biasValue.offset;
+        const sign = offset > 0 ? '+' : '';
+        content = `温度補正バイアス: ${sign}${offset}°C`;
+      } else if (data.biasType === 'sensitivity' && data.biasValue) {
+        content = `感度設定: ${data.biasValue.level}`;
+      } else {
+        content = `${data.biasType}の設定`;
+      }
+    }
+    
+    // Create a new row
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${data.date || '-'}</td>
+      <td>${data.time || '-'}</td>
+      <td>${content || '-'}</td>
+    `;
+    
+    // Add to the beginning of the table
+    personalityTable.insertBefore(row, personalityTable.firstChild);
+  }
+  
+  // Function to fetch latest data every 5 seconds instead of every second
+  setInterval(() => {
+    fetch('/api/sensor-data/latest')
+      .then(response => response.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          data.forEach(sensorData => {
+            if (sensorData) updateSensorData(sensorData);
+          });
+        }
+      })
+      .catch(error => console.error('Error fetching sensor data:', error));
+  }, 5000); // Changed from 1000 to 5000
+  
+  // Fetch alerts, settings, etc. every 30 seconds instead of every 5 seconds
+  setInterval(() => {
+    // Fetch latest alerts
+    fetch('/api/alerts')
+      .then(response => response.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          data.forEach(alert => {
+            if (alert) handleAlert(alert);
+          });
+        }
+      })
+      .catch(error => console.error('Error fetching alerts:', error));
+      
+    // Fetch latest settings
+    fetch('/api/settings')
+      .then(response => response.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          data.forEach(setting => {
+            if (setting) handleSettingChange(setting);
+          });
+        }
+      })
+      .catch(error => console.error('Error fetching settings:', error));
+      
+    // Fetch latest personality data
+    fetch('/api/personality')
+      .then(response => response.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          data.forEach(item => {
+            if (item) handlePersonalityUpdate(item);
+          });
+        }
+      })
+      .catch(error => console.error('Error fetching personality data:', error));
+  }, 30000); // Changed from 5000 to 30000
+
+  // Tab switching logic
+  document.addEventListener('DOMContentLoaded', () => {
+    // Set initial active tab
+    const defaultTab = 'sensorTab';
+    const defaultBtn = document.getElementById('sensorTabBtn');
+    switchTab(defaultTab, defaultBtn);
+
+    // Initialize all expand/collapse buttons with proper state
+    document.querySelectorAll('.section-header .expand-btn').forEach(btn => {
+      const wrapperId = btn.getAttribute('data-wrapper-id');
+      if (wrapperId) {
+        const wrapper = document.getElementById(wrapperId);
+        if (wrapper) {
+          updateExpandButtonText(btn, wrapper.classList.contains('expanded'));
+        }
+      }
+    });
+  });
+
+  function switchTab(tabId, buttonElement) {
+    // Remove active class from all tabs and buttons
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.style.display = 'none';
+        tab.classList.remove('active');
+    });
+    document.querySelectorAll('.tab-button').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Show selected tab and activate button
+    const selectedTab = document.getElementById(tabId);
+    selectedTab.style.display = 'block';
+    selectedTab.classList.add('active');
+    buttonElement.classList.add('active');
+    
+    // Store the active tab in localStorage
+    localStorage.setItem('activeTab', tabId);
+    localStorage.setItem('activeTabBtn', buttonElement.id);
+  }
+
+  // Restore tab state on page load
+  const savedTab = localStorage.getItem('activeTab');
+  const savedTabBtn = localStorage.getItem('activeTabBtn');
+  if (savedTab && savedTabBtn) {
+    const btn = document.getElementById(savedTabBtn);
+    if (btn) {
+      switchTab(savedTab, btn);
+    }
+  }
+
+  // Updated function to toggle table expansion with animation
+  function toggleTableExpand(wrapperId) {
+    const wrapper = document.getElementById(wrapperId);
+    if (!wrapper) return;
+    
+    // Toggle expanded class
+    wrapper.classList.toggle('expanded');
+    
+    // Update button text
+    const isExpanded = wrapper.classList.contains('expanded');
+    const btn = event.currentTarget;
+    const toggleIcon = btn.querySelector('.toggle-icon');
+    const toggleText = btn.querySelector('.toggle-text');
+    
+    if (toggleIcon) toggleIcon.textContent = isExpanded ? '⌃' : '⌄';
+    if (toggleText) toggleText.textContent = isExpanded ? '折りたたむ' : '展開';
+    
+    btn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+    
+    // Check for scroll content after expansion
+    setTimeout(() => {
+      const hasMoreContent = wrapper.scrollHeight > wrapper.clientHeight + 10;
+      wrapper.classList.toggle('has-more-content', hasMoreContent);
+    }, 300); // Wait for animation to complete
+  }
+
+  // Function to initialize all history tables
+  function initializeHistoryTables() {
+    document.querySelectorAll('.alert-table, .settings-table, .personality-table').forEach(wrapper => {
+      // Check if the table has content
+      const tableBody = wrapper.querySelector('tbody');
+      const hasRows = tableBody && tableBody.children.length > 0;
+      
+      // Add appropriate classes based on content
+      if (hasRows) {
+        wrapper.classList.add('has-content');
+        
+        // Check if scrolling is needed
+        const hasMoreContent = wrapper.scrollHeight > wrapper.clientHeight + 10;
+        wrapper.classList.toggle('has-more-content', hasMoreContent);
+      } else {
+        wrapper.classList.add('empty');
+      }
+      
+      // Set up expand button state
+      const wrapperId = wrapper.id;
+      if (wrapperId) {
+        const btn = document.querySelector(`.expand-btn[onclick*="${wrapperId}"]`);
+        if (btn) {
+          const isExpanded = wrapper.classList.contains('expanded');
+          const toggleIcon = btn.querySelector('.toggle-icon');
+          const toggleText = btn.querySelector('.toggle-text');
+          
+          if (toggleIcon) toggleIcon.textContent = isExpanded ? '⌃' : '⌄';
+          if (toggleText) toggleText.textContent = isExpanded ? '折りたたむ' : '展開';
+          
+          btn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+        }
+      }
+    });
+  }
+
+  // Call initialization on page load
+  document.addEventListener('DOMContentLoaded', () => {
+    initializeHistoryTables();
+    
+    // Add scroll detection for table wrappers
+    document.querySelectorAll('.table-wrapper').forEach(wrapper => {
+      wrapper.addEventListener('scroll', () => {
+        const hasMore = wrapper.scrollHeight > wrapper.clientHeight + 10;
+        wrapper.classList.toggle('has-more-content', hasMore);
+      });
+    });
+  });
+</script>
