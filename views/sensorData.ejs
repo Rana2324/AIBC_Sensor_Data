@@ -225,18 +225,47 @@
     if (statusElement) {
       statusElement.className = `sensor-status ${isActive ? 'active' : 'inactive'}`;
       statusElement.textContent = isActive ? '稼働中' : '停止中';
+      
+      // Also update server status
+      const activeCount = document.querySelectorAll('.sensor-status.active').length;
+      const activeSensorsElement = document.getElementById('active-sensors');
+      if (activeSensorsElement) {
+        activeSensorsElement.textContent = activeCount;
+      }
+      
+      // Update last data received time
+      const lastDataElement = document.getElementById('last-data-received');
+      if (lastDataElement) {
+        lastDataElement.textContent = new Date().toLocaleString('ja-JP', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        });
+      }
     }
   }
 
   // Function to update sensor data display
   function updateSensorData(data) {
-    if (!data || !data.sensorId) return;
+    if (!data || !data.sensorId) {
+      console.warn('Invalid sensor data received:', data);
+      return;
+    }
+    
+    console.log(`Processing sensor data update for ${data.sensorId}:`, data);
     
     const tbody = document.getElementById(`tbody-${data.sensorId}`);
-    if (!tbody) return;
+    if (!tbody) {
+      console.warn(`Table body element not found for sensor ${data.sensorId}`);
+      return;
+    }
     
     // Update sensor status
-    updateSensorStatus(data.sensorId, data.isActive);
+    const isActive = new Date(data.timestamp) > new Date(Date.now() - 5000);
+    updateSensorStatus(data.sensorId, isActive);
     
     // Create a new row for the data
     const row = document.createElement('tr');
@@ -266,7 +295,8 @@
     // Add the 16 temperature readings
     if (data.temperatures && Array.isArray(data.temperatures)) {
       data.temperatures.forEach(temp => {
-        rowHTML += `<td>${typeof temp === 'number' ? temp.toFixed(1) : '--'}</td>`;
+        const value = temp !== null && temp !== undefined ? parseFloat(temp).toFixed(1) : '--';
+        rowHTML += `<td>${value}</td>`;
       });
       // Fill remaining slots if less than 16 readings
       for (let i = data.temperatures.length; i < 16; i++) {
@@ -279,10 +309,15 @@
       }
     }
     
-    // Add average temperature and status
-    const avgTemp = data.temperatures ? 
-      (data.temperatures.reduce((sum, temp) => sum + (typeof temp === 'number' ? temp : 0), 0) / data.temperatures.length).toFixed(1) :
-      '--';
+    // Calculate average temperature from valid temperatures
+    let avgTemp = '--';
+    if (data.temperatures && Array.isArray(data.temperatures)) {
+      const validTemps = data.temperatures.filter(t => t !== null && t !== undefined && !isNaN(parseFloat(t)));
+      if (validTemps.length > 0) {
+        const sum = validTemps.reduce((acc, curr) => acc + parseFloat(curr), 0);
+        avgTemp = (sum / validTemps.length).toFixed(1);
+      }
+    }
     
     rowHTML += `
       <td>${avgTemp} °C</td>
@@ -291,12 +326,164 @@
     
     row.innerHTML = rowHTML;
     
+    // Check for empty state and remove it if it exists
+    const emptyRow = tbody.querySelector('.empty-table-row');
+    if (emptyRow) {
+      tbody.removeChild(emptyRow);
+    }
+    
     // Add to the beginning of the table
     tbody.insertBefore(row, tbody.firstChild);
     
     // Keep only the latest 100 rows
     while (tbody.children.length > 100) {
       tbody.removeChild(tbody.lastChild);
+    }
+    
+    console.log(`Updated sensor data display for ${data.sensorId}`);
+  }
+  
+  // New function to handle full sensor dataset
+  function handleFullSensorData(data) {
+    if (!data || !data.sensorId || !Array.isArray(data.readings)) {
+      console.warn('Invalid full sensor data received:', data);
+      return;
+    }
+    
+    console.log(`Received full dataset (${data.readings.length} readings) for sensor ${data.sensorId}`);
+    
+    const tbody = document.getElementById(`tbody-${data.sensorId}`);
+    if (!tbody) {
+      console.warn(`Table body element not found for sensor ${data.sensorId}`);
+      return;
+    }
+    
+    // Clear existing table data
+    tbody.innerHTML = '';
+    
+    // Add all readings, newest first (they should already be sorted by timestamp)
+    data.readings.forEach(reading => {
+      updateSensorData(reading);
+    });
+    
+    // Update sensor status based on most recent reading
+    if (data.readings.length > 0) {
+      const mostRecent = data.readings[0];
+      const isActive = new Date(mostRecent.timestamp) > new Date(Date.now() - 5000);
+      updateSensorStatus(data.sensorId, isActive);
+    }
+    
+    console.log(`Updated display with full dataset for sensor ${data.sensorId}`);
+  }
+  
+  // New function to handle alerts full dataset
+  function handleFullAlertsData(alerts) {
+    if (!Array.isArray(alerts)) {
+      console.warn('Invalid alerts data received');
+      return;
+    }
+    
+    console.log(`Received full alerts dataset (${alerts.length} alerts)`);
+    
+    // Group alerts by sensorId
+    const alertsBySensor = {};
+    
+    alerts.forEach(alert => {
+      if (!alert.sensorId) return;
+      
+      if (!alertsBySensor[alert.sensorId]) {
+        alertsBySensor[alert.sensorId] = [];
+      }
+      
+      alertsBySensor[alert.sensorId].push(alert);
+    });
+    
+    // Update each sensor's alerts table
+    for (const [sensorId, sensorAlerts] of Object.entries(alertsBySensor)) {
+      const alertsTable = document.getElementById(`alerts-${sensorId}`);
+      if (!alertsTable) continue;
+      
+      // Clear existing alerts
+      alertsTable.innerHTML = '';
+      
+      // Add all alerts, newest first
+      sensorAlerts.forEach(alert => handleAlert(alert, false));
+      
+      console.log(`Updated alerts table for sensor ${sensorId} with ${sensorAlerts.length} alerts`);
+    }
+  }
+  
+  // New function to handle settings full dataset
+  function handleFullSettingsData(settings) {
+    if (!Array.isArray(settings)) {
+      console.warn('Invalid settings data received');
+      return;
+    }
+    
+    console.log(`Received full settings dataset (${settings.length} settings)`);
+    
+    // Group settings by sensorId
+    const settingsBySensor = {};
+    
+    settings.forEach(setting => {
+      if (!setting.sensorId) return;
+      
+      if (!settingsBySensor[setting.sensorId]) {
+        settingsBySensor[setting.sensorId] = [];
+      }
+      
+      settingsBySensor[setting.sensorId].push(setting);
+    });
+    
+    // Update each sensor's settings table
+    for (const [sensorId, sensorSettings] of Object.entries(settingsBySensor)) {
+      const settingsTable = document.getElementById(`settings-${sensorId}`);
+      if (!settingsTable) continue;
+      
+      // Clear existing settings
+      settingsTable.innerHTML = '';
+      
+      // Add all settings, newest first
+      sensorSettings.forEach(setting => handleSettingChange(setting, false));
+      
+      console.log(`Updated settings table for sensor ${sensorId} with ${sensorSettings.length} settings`);
+    }
+  }
+  
+  // New function to handle personality full dataset
+  function handleFullPersonalityData(personalities) {
+    if (!Array.isArray(personalities)) {
+      console.warn('Invalid personality data received');
+      return;
+    }
+    
+    console.log(`Received full personality dataset (${personalities.length} items)`);
+    
+    // Group personalities by sensorId
+    const personalitiesBySensor = {};
+    
+    personalities.forEach(personality => {
+      if (!personality.sensorId) return;
+      
+      if (!personalitiesBySensor[personality.sensorId]) {
+        personalitiesBySensor[personality.sensorId] = [];
+      }
+      
+      personalitiesBySensor[personality.sensorId].push(personality);
+    });
+    
+    // Update each sensor's personality table
+    for (const [sensorId, sensorPersonalities] of Object.entries(personalitiesBySensor)) {
+      const personalityTable = document.getElementById(`personality-${sensorId}`);
+      if (!personalityTable) continue;
+      
+      // Clear existing personality items
+      personalityTable.innerHTML = '';
+      
+      // Add all personality items, newest first
+      sensorPersonalities.forEach(item => handlePersonalityUpdate(item, false));
+      
+      console.log(`Updated personality table for sensor ${sensorId} with ${sensorPersonalities.length} items`);
     }
   }
   
@@ -306,53 +493,49 @@
     const refreshBtn = event.currentTarget;
     refreshBtn.classList.add('spinning');
     
-    // Fetch the latest data for the specific sensor
-    fetch(`/api/sensor-data/${sensorId}/latest`)
-      .then(response => response.json())
-      .then(data => {
-        if (data) {
-          // Clear existing table data
-          const tbody = document.getElementById(`tbody-${sensorId}`);
-          if (tbody) {
-            tbody.innerHTML = '';
-          }
-          // Update with new data
-          if (Array.isArray(data)) {
-            data.forEach(item => {
-              if (item) updateSensorData(item);
-            });
-          } else {
-            updateSensorData(data);
-          }
-          console.log(`Data refreshed for sensor ${sensorId}`);
-        }
-      })
-      .catch(error => console.error(`Error refreshing sensor data (${sensorId}):`, error))
-      .finally(() => {
-        // Remove the spinning class after a short delay for visual feedback
-        setTimeout(() => {
-          refreshBtn.classList.remove('spinning');
-        }, 500);
-      });
+    console.log(`Requesting full data refresh for sensor ${sensorId}...`);
+    
+    // Request a full data refresh via socket
+    const socket = io();
+    socket.emit('requestFullData');
+    
+    // Set a timeout to remove the spinning class after 1 second
+    setTimeout(() => {
+      refreshBtn.classList.remove('spinning');
+    }, 1000);
   }
   
   // Function to handle alert updates
-  function handleAlert(data) {
-    if (!data || !data.sensorId) return;
+  function handleAlert(data, addToTop = true) {
+    if (!data || !data.sensorId) {
+      console.warn('Invalid alert data received:', data);
+      return;
+    }
+    
+    console.log(`Processing alert for ${data.sensorId}:`, data);
     
     const alertsTable = document.getElementById(`alerts-${data.sensorId}`);
-    if (!alertsTable) return;
+    if (!alertsTable) {
+      console.warn(`Alert table not found for sensor ${data.sensorId}`);
+      return;
+    }
     
     // Create a new row for the alert
     const row = document.createElement('tr');
-    row.className = data.eventType && data.eventType.includes('RECOVERY') ? 'alert-recovery' : 'alert-row';
+    row.className = data.eventType && String(data.eventType).includes('RECOVERY') ? 'alert-recovery' : 'alert-row';
     
     // Create row content
     row.innerHTML = `
       <td>${data.date || '-'}</td>
       <td>${data.time || '-'}</td>
-      <td>${data.event || '-'}</td>
+      <td>${data.event || data.alertReason || '-'}</td>
     `;
+    
+    // Check for empty state and remove it if it exists
+    const emptyRow = alertsTable.querySelector('.empty-table-row');
+    if (emptyRow) {
+      alertsTable.removeChild(emptyRow);
+    }
     
     // Add to the beginning of the table
     alertsTable.insertBefore(row, alertsTable.firstChild);
@@ -361,14 +544,27 @@
     while (alertsTable.children.length > 10) {
       alertsTable.removeChild(alertsTable.lastChild);
     }
+    
+    console.log(`Alert display updated for ${data.sensorId}`);
+    
+    // Show notification if appropriate
+    showNotification(`アラート: ${data.sensorId}`, data.event || data.alertReason || 'アラートが発生しました');
   }
   
   // Function to handle settings updates
-  function handleSettingChange(data) {
-    if (!data || !data.sensorId) return;
+  function handleSettingChange(data, addToTop = true) {
+    if (!data || !data.sensorId) {
+      console.warn('Invalid setting data received:', data);
+      return;
+    }
+    
+    console.log(`Processing setting change for ${data.sensorId}:`, data);
     
     const settingsTable = document.getElementById(`settings-${data.sensorId}`);
-    if (!settingsTable) return;
+    if (!settingsTable) {
+      console.warn(`Settings table not found for sensor ${data.sensorId}`);
+      return;
+    }
     
     // Format the content
     let content = data.content;
@@ -391,16 +587,37 @@
       <td>${content || '-'}</td>
     `;
     
+    // Check for empty state and remove it if it exists
+    const emptyRow = settingsTable.querySelector('.empty-table-row');
+    if (emptyRow) {
+      settingsTable.removeChild(emptyRow);
+    }
+    
     // Add to the beginning of the table
     settingsTable.insertBefore(row, settingsTable.firstChild);
+    
+    // Keep only the latest 10 rows
+    while (settingsTable.children.length > 10) {
+      settingsTable.removeChild(settingsTable.lastChild);
+    }
+    
+    console.log(`Settings display updated for ${data.sensorId}`);
   }
   
   // Function to handle personality updates
-  function handlePersonalityUpdate(data) {
-    if (!data || !data.sensorId) return;
+  function handlePersonalityUpdate(data, addToTop = true) {
+    if (!data || !data.sensorId) {
+      console.warn('Invalid personality data received:', data);
+      return;
+    }
+    
+    console.log(`Processing personality update for ${data.sensorId}:`, data);
     
     const personalityTable = document.getElementById(`personality-${data.sensorId}`);
-    if (!personalityTable) return;
+    if (!personalityTable) {
+      console.warn(`Personality table not found for sensor ${data.sensorId}`);
+      return;
+    }
     
     // Format the content
     let content = data.content;
@@ -424,65 +641,69 @@
       <td>${content || '-'}</td>
     `;
     
+    // Check for empty state and remove it if it exists
+    const emptyRow = personalityTable.querySelector('.empty-table-row');
+    if (emptyRow) {
+      personalityTable.removeChild(emptyRow);
+    }
+    
     // Add to the beginning of the table
     personalityTable.insertBefore(row, personalityTable.firstChild);
+    
+    // Keep only the latest 10 rows
+    while (personalityTable.children.length > 10) {
+      personalityTable.removeChild(personalityTable.lastChild);
+    }
+    
+    console.log(`Personality display updated for ${data.sensorId}`);
   }
   
-  // Function to fetch latest data every 5 seconds instead of every second
-  setInterval(() => {
-    fetch('/api/sensor-data/latest')
-      .then(response => response.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          data.forEach(sensorData => {
-            if (sensorData) updateSensorData(sensorData);
-          });
+  // Show browser notifications if supported
+  function showNotification(title, body) {
+    if (!("Notification" in window)) {
+      console.log("Browser does not support notifications");
+      return;
+    }
+    
+    if (Notification.permission === "granted") {
+      new Notification(title, { body });
+    } else if (Notification.permission !== "denied") {
+      Notification.requestPermission().then(permission => {
+        if (permission === "granted") {
+          new Notification(title, { body });
         }
-      })
-      .catch(error => console.error('Error fetching sensor data:', error));
-  }, 5000); // Changed from 1000 to 5000
+      });
+    }
+  }
   
-  // Fetch alerts, settings, etc. every 30 seconds instead of every 5 seconds
-  setInterval(() => {
-    // Fetch latest alerts
-    fetch('/api/alerts')
-      .then(response => response.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          data.forEach(alert => {
-            if (alert) handleAlert(alert);
-          });
-        }
-      })
-      .catch(error => console.error('Error fetching alerts:', error));
-      
-    // Fetch latest settings
-    fetch('/api/settings')
-      .then(response => response.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          data.forEach(setting => {
-            if (setting) handleSettingChange(setting);
-          });
-        }
-      })
-      .catch(error => console.error('Error fetching settings:', error));
-      
-    // Fetch latest personality data
-    fetch('/api/personality')
-      .then(response => response.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          data.forEach(item => {
-            if (item) handlePersonalityUpdate(item);
-          });
-        }
-      })
-      .catch(error => console.error('Error fetching personality data:', error));
-  }, 30000); // Changed from 5000 to 30000
-
   // Tab switching logic
   document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM content loaded, initializing UI...');
+    
+    // Socket.IO event listeners for full dataset updates
+    const socket = io();
+    
+    socket.on('fullSensorData', handleFullSensorData);
+    socket.on('fullAlertsData', handleFullAlertsData);
+    socket.on('fullSettingsData', handleFullSettingsData);
+    socket.on('fullPersonalityData', handleFullPersonalityData);
+    
+    // Listen for notifications about new data
+    socket.on('newDataAvailable', (data) => {
+      console.log(`New data notification: ${data.count} new readings for sensor ${data.sensorId}`);
+      // You could show a notification to the user here
+      showNotification('新規データあり', `センサー ${data.sensorId} に ${data.count} 件の新しいデータがあります`);
+    });
+    
+    socket.on('dataUpdated', (data) => {
+      console.log(`Data updated at ${new Date(data.timestamp).toLocaleTimeString()}`);
+      // Update the last updated timestamp in the UI
+      const lastUpdatedElement = document.getElementById('status-last-updated');
+      if (lastUpdatedElement) {
+        lastUpdatedElement.textContent = `最終更新: ${new Date(data.timestamp).toLocaleString('ja-JP')}`;
+      }
+    });
+    
     // Set initial active tab
     const defaultTab = 'sensorTab';
     const defaultBtn = document.getElementById('sensorTabBtn');
@@ -490,7 +711,7 @@
 
     // Initialize all expand/collapse buttons with proper state
     document.querySelectorAll('.section-header .expand-btn').forEach(btn => {
-      const wrapperId = btn.getAttribute('data-wrapper-id');
+      const wrapperId = btn.getAttribute('onclick')?.match(/['"](.*?)['"]/)?.[1];
       if (wrapperId) {
         const wrapper = document.getElementById(wrapperId);
         if (wrapper) {
@@ -498,9 +719,24 @@
         }
       }
     });
+    
+    // Initialize history tables
+    initializeHistoryTables();
+    
+    // Add scroll detection for table wrappers
+    document.querySelectorAll('.table-wrapper').forEach(wrapper => {
+      wrapper.addEventListener('scroll', () => {
+        const hasMore = wrapper.scrollHeight > wrapper.clientHeight + 10;
+        wrapper.classList.toggle('has-more-content', hasMore);
+      });
+    });
+    
+    console.log('UI initialization complete');
   });
 
   function switchTab(tabId, buttonElement) {
+    if (!tabId || !buttonElement) return;
+    
     // Remove active class from all tabs and buttons
     document.querySelectorAll('.tab-content').forEach(tab => {
         tab.style.display = 'none';
@@ -512,24 +748,28 @@
     
     // Show selected tab and activate button
     const selectedTab = document.getElementById(tabId);
-    selectedTab.style.display = 'block';
-    selectedTab.classList.add('active');
-    buttonElement.classList.add('active');
-    
-    // Store the active tab in localStorage
-    localStorage.setItem('activeTab', tabId);
-    localStorage.setItem('activeTabBtn', buttonElement.id);
+    if (selectedTab) {
+      selectedTab.style.display = 'block';
+      selectedTab.classList.add('active');
+      buttonElement.classList.add('active');
+      
+      // Store the active tab in localStorage
+      localStorage.setItem('activeTab', tabId);
+      localStorage.setItem('activeTabBtn', buttonElement.id);
+    }
   }
 
   // Restore tab state on page load
-  const savedTab = localStorage.getItem('activeTab');
-  const savedTabBtn = localStorage.getItem('activeTabBtn');
-  if (savedTab && savedTabBtn) {
-    const btn = document.getElementById(savedTabBtn);
-    if (btn) {
-      switchTab(savedTab, btn);
+  window.addEventListener('load', () => {
+    const savedTab = localStorage.getItem('activeTab');
+    const savedTabBtn = localStorage.getItem('activeTabBtn');
+    if (savedTab && savedTabBtn) {
+      const btn = document.getElementById(savedTabBtn);
+      if (btn) {
+        switchTab(savedTab, btn);
+      }
     }
-  }
+  });
 
   // Updated function to toggle table expansion with animation
   function toggleTableExpand(wrapperId) {
@@ -557,12 +797,23 @@
     }, 300); // Wait for animation to complete
   }
 
+  // Function to update button text
+  function updateExpandButtonText(btn, isExpanded) {
+    const toggleIcon = btn.querySelector('.toggle-icon');
+    const toggleText = btn.querySelector('.toggle-text');
+    
+    if (toggleIcon) toggleIcon.textContent = isExpanded ? '⌃' : '⌄';
+    if (toggleText) toggleText.textContent = isExpanded ? '折りたたむ' : '展開';
+    
+    btn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+  }
+
   // Function to initialize all history tables
   function initializeHistoryTables() {
     document.querySelectorAll('.alert-table, .settings-table, .personality-table').forEach(wrapper => {
       // Check if the table has content
       const tableBody = wrapper.querySelector('tbody');
-      const hasRows = tableBody && tableBody.children.length > 0;
+      const hasRows = tableBody && tableBody.children.length > 0 && !tableBody.querySelector('.empty-table-row');
       
       // Add appropriate classes based on content
       if (hasRows) {
@@ -580,29 +831,12 @@
       if (wrapperId) {
         const btn = document.querySelector(`.expand-btn[onclick*="${wrapperId}"]`);
         if (btn) {
-          const isExpanded = wrapper.classList.contains('expanded');
-          const toggleIcon = btn.querySelector('.toggle-icon');
-          const toggleText = btn.querySelector('.toggle-text');
-          
-          if (toggleIcon) toggleIcon.textContent = isExpanded ? '⌃' : '⌄';
-          if (toggleText) toggleText.textContent = isExpanded ? '折りたたむ' : '展開';
-          
-          btn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+          updateExpandButtonText(btn, wrapper.classList.contains('expanded'));
         }
       }
     });
   }
-
-  // Call initialization on page load
-  document.addEventListener('DOMContentLoaded', () => {
-    initializeHistoryTables();
-    
-    // Add scroll detection for table wrappers
-    document.querySelectorAll('.table-wrapper').forEach(wrapper => {
-      wrapper.addEventListener('scroll', () => {
-        const hasMore = wrapper.scrollHeight > wrapper.clientHeight + 10;
-        wrapper.classList.toggle('has-more-content', hasMore);
-      });
-    });
-  });
+  
+  // Enhanced logging
+  console.log('Sensor data script loaded and ready to receive updates');
 </script>

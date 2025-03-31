@@ -1,19 +1,20 @@
 require('dotenv').config();
-const { MongoClient } = require('mongodb');
+const mongoose = require('mongoose');
+const { connectDB } = require('../config/db');
 
 async function insertTestData() {
-    const client = new MongoClient(process.env.MONGODB_URI);
-    
     try {
-        await client.connect();
-        const db = client.db(process.env.DB_NAME);
-        const collection = db.collection('temperature_readings');
-
+        // Connect to MongoDB using Mongoose
+        await connectDB();
+        
+        // Get the model
+        const TemperatureReading = mongoose.model('TemperatureReading');
+        
         // Clear existing data
-        await collection.deleteMany({});
+        await TemperatureReading.deleteMany({});
 
         // Insert test data
-        const result = await collection.insertMany([
+        const result = await TemperatureReading.insertMany([
             {
                 sensorId: "SENSOR_001",
                 timestamp: new Date(),
@@ -28,11 +29,11 @@ async function insertTestData() {
             }
         ]);
 
-        console.log(`Inserted ${result.insertedCount} documents`);
+        console.log(`Inserted ${result.length} documents`);
     } catch (err) {
         console.error('Error:', err);
     } finally {
-        await client.close();
+        await mongoose.disconnect();
     }
 }
 

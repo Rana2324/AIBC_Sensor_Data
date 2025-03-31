@@ -1,27 +1,29 @@
-const { MongoClient } = require('mongodb');
+const mongoose = require('mongoose');
 require('dotenv').config();
 
-const uri = process.env.MONGODB_URI;
-const client = new MongoClient(uri);
-let db;
+// Database configuration with correct collection names
+const dbConfig = {
+  uri: process.env.MONGODB_URI,
+  dbName: 'sensorData',
+  collections: {
+    temperatureReadings: 'temperature_readings',
+    alertsLog: 'alerts_log',
+    settingsHistory: 'settings_history',
+    personalityHistory: 'personality_history'
+  }
+};
 
 async function connectDB() {
   try {
-    await client.connect();
-    db = client.db(process.env.DB_NAME);
-    console.log('Connected to MongoDB Atlas');
-    return db;
+    await mongoose.connect(dbConfig.uri, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+    console.log('Connected to MongoDB Atlas using Mongoose');
   } catch (error) {
     console.error('MongoDB connection error:', error);
     process.exit(1);
   }
 }
 
-async function getDB() {
-  if (!db) {
-    await connectDB();
-  }
-  return db;
-}
-
-module.exports = { connectDB, getDB };
+module.exports = { connectDB, dbConfig };
