@@ -259,19 +259,21 @@ body {
 }
 
 .sensor-status.active {
-  background-color: rgba(76, 175, 80, 0.1);
+  background-color: rgba(76, 175, 80, 0.2);
   color: #4CAF50;
+  border: 1px solid rgba(76, 175, 80, 0.3);
 }
 
 .sensor-status.active::before {
   background-color: #4CAF50;
-  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.3);
   animation: pulse 2s infinite;
 }
 
 .sensor-status.inactive {
-  background-color: rgba(158, 158, 158, 0.1);
+  background-color: rgba(158, 158, 158, 0.2);
   color: #9E9E9E;
+  border: 1px solid rgba(158, 158, 158, 0.3);
 }
 
 .sensor-status.inactive::before {
