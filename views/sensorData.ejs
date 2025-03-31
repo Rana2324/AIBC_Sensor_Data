@@ -537,17 +537,15 @@
           time = time || timestamp.toLocaleTimeString('ja-JP');
         }
         
-        // Create date cell
+        // Create cells
         const dateCell = document.createElement('td');
         dateCell.textContent = date;
         tr.appendChild(dateCell);
         
-        // Create time cell
         const timeCell = document.createElement('td');
         timeCell.textContent = time;
         tr.appendChild(timeCell);
         
-        // Create event cell
         const eventCell = document.createElement('td');
         eventCell.textContent = alert.alert_reason || alert.event || alert.alertReason || '-';
         tr.appendChild(eventCell);
@@ -572,39 +570,6 @@
     return newAlerts;  // Return any new alerts we found
   }
   
-  // Function to pulse the real-time indicator
-  function pulseRealTimeIndicator(sensorId, type = '') {
-    const indicatorId = type ? `${type}-realtime-indicator-${sensorId}` : `realtime-indicator-${sensorId}`;
-    const indicator = document.getElementById(indicatorId);
-    
-    if (indicator) {
-      // Add a stronger pulse effect by adding this class
-      const dot = indicator.querySelector('.realtime-dot');
-      dot.classList.add('active-pulse');
-      
-      // Also make the text brighter for more visibility
-      const text = indicator.querySelector('.realtime-text');
-      if (text) {
-        text.classList.add('active-text');
-        setTimeout(() => {
-          text.classList.remove('active-text');
-        }, 1500);
-      }
-      
-      // Remove pulse class after animation completes
-      setTimeout(() => {
-        dot.classList.remove('active-pulse');
-      }, 1000);
-      
-      // Also update timestamp for this type of indicator
-      if (type === 'alert') {
-        updateAlertLastUpdated(sensorId);
-      } else {
-        updateDataLastUpdated(sensorId);
-      }
-    }
-  }
-  
   // Update last updated timestamp for a specific sensor with highlight effect
   function updateDataLastUpdated(sensorId) {
     const now = new Date();
@@ -622,6 +587,240 @@
       lastUpdatedElement.classList.add('timestamp-updated');
       setTimeout(() => {
         lastUpdatedElement.classList.remove('timestamp-updated');
+      }, 2000);
+    }
+  }
+  
+  // Update last updated timestamp for alert updates
+  function updateAlertLastUpdated(sensorId) {
+    const now = new Date();
+    const formattedTime = now.toLocaleTimeString('ja-JP', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+    
+    const lastUpdatedElement = document.getElementById(`alert-last-updated-${sensorId}`);
+    if (lastUpdatedElement) {
+      lastUpdatedElement.textContent = `最終更新: ${formattedTime}`;
+      lastUpdatedElement.classList.add('timestamp-updated');
+      setTimeout(() => {
+        lastUpdatedElement.classList.remove('timestamp-updated');
+      }, 2000);
+    }
+  }
+  
+  // Toggle table expand/collapse
+  function toggleTableExpand(tableId) {
+    const tableWrapper = document.getElementById(tableId);
+    const button = event.currentTarget;
+    const toggleIcon = button.querySelector('.toggle-icon');
+    const toggleText = button.querySelector('.toggle-text');
+    
+    if (tableWrapper) {
+      tableWrapper.classList.toggle('expanded');
+      
+      if (tableWrapper.classList.contains('expanded')) {
+        toggleText.textContent = '折りたたむ';
+        toggleIcon.style.transform = 'rotate(180deg)';
+        button.setAttribute('aria-expanded', 'true');
+      } else {
+        toggleText.textContent = '展開';
+        toggleIcon.style.transform = 'rotate(0deg)';
+        button.setAttribute('aria-expanded', 'false');
+      }
+    }
+  }
+  
+  // Handle settings data updates
+  function handleFullSettingsData(data) {
+    if (!Array.isArray(data)) return;
+    
+    // Group settings by sensor ID
+    const settingsBySensor = {};
+    data.forEach(setting => {
+      if (!setting.sensorId) return;
+      
+      if (!settingsBySensor[setting.sensorId]) {
+        settingsBySensor[setting.sensorId] = [];
+      }
+      settingsBySensor[setting.sensorId].push(setting);
+    });
+    
+    // Update each sensor's settings table
+    for (const sensorId in settingsBySensor) {
+      const settingsTable = document.getElementById(`settings-${sensorId}`);
+      if (!settingsTable) continue;
+      
+      // Clear existing rows
+      settingsTable.innerHTML = '';
+      
+      // Add new rows
+      settingsBySensor[sensorId].forEach(setting => {
+        const tr = document.createElement('tr');
+        
+        // Format date and time if needed
+        let date = setting.date || '';
+        let time = setting.time || '';
+        
+        if (!date || !time) {
+          const timestamp = new Date(setting.timestamp || Date.now());
+          date = date || timestamp.toLocaleDateString('ja-JP');
+          time = time || timestamp.toLocaleTimeString('ja-JP');
+        }
+        
+        // Create cells
+        const dateCell = document.createElement('td');
+        dateCell.textContent = date;
+        tr.appendChild(dateCell);
+        
+        const timeCell = document.createElement('td');
+        timeCell.textContent = time;
+        tr.appendChild(timeCell);
+        
+        const contentCell = document.createElement('td');
+        contentCell.textContent = setting.content || '-';
+        tr.appendChild(contentCell);
+        
+        settingsTable.appendChild(tr);
+      });
+      
+      // Add "no settings" message if empty
+      if (settingsBySensor[sensorId].length === 0) {
+        const tr = document.createElement('tr');
+        tr.className = 'empty-table-row';
+        
+        const td = document.createElement('td');
+        td.colSpan = 3;
+        td.textContent = '設定変更履歴はありません';
+        
+        tr.appendChild(td);
+        settingsTable.appendChild(tr);
+      }
+    }
+  }
+  
+  // Handle personality data updates
+  function handleFullPersonalityData(data) {
+    if (!Array.isArray(data)) return;
+    
+    // Group personality data by sensor ID
+    const personalityBySensor = {};
+    data.forEach(item => {
+      if (!item.sensorId) return;
+      
+      if (!personalityBySensor[item.sensorId]) {
+        personalityBySensor[item.sensorId] = [];
+      }
+      personalityBySensor[item.sensorId].push(item);
+    });
+    
+    // Update each sensor's personality table
+    for (const sensorId in personalityBySensor) {
+      const personalityTable = document.getElementById(`personality-${sensorId}`);
+      if (!personalityTable) continue;
+      
+      // Clear existing rows
+      personalityTable.innerHTML = '';
+      
+      // Add new rows
+      personalityBySensor[sensorId].forEach(item => {
+        const tr = document.createElement('tr');
+        
+        // Format date and time if needed
+        let date = item.date || '';
+        let time = item.time || '';
+        
+        if (!date || !time) {
+          const timestamp = new Date(item.timestamp || Date.now());
+          date = date || timestamp.toLocaleDateString('ja-JP');
+          time = time || timestamp.toLocaleTimeString('ja-JP');
+        }
+        
+        // Create cells
+        const dateCell = document.createElement('td');
+        dateCell.textContent = date;
+        tr.appendChild(dateCell);
+        
+        const timeCell = document.createElement('td');
+        timeCell.textContent = time;
+        tr.appendChild(timeCell);
+        
+        const contentCell = document.createElement('td');
+        contentCell.textContent = item.content || '-';
+        tr.appendChild(contentCell);
+        
+        personalityTable.appendChild(tr);
+      });
+      
+      // Add "no personality" message if empty
+      if (personalityBySensor[sensorId].length === 0) {
+        const tr = document.createElement('tr');
+        tr.className = 'empty-table-row';
+        
+        const td = document.createElement('td');
+        td.colSpan = 3;
+        td.textContent = 'バイアス設定履歴はありません';
+        
+        tr.appendChild(td);
+        personalityTable.appendChild(tr);
+      }
+    }
+  }
+  
+  // Tab switching function
+  function switchTab(tabId, button) {
+    // Hide all tab contents
+    document.querySelectorAll('.tab-content').forEach(tab => {
+      tab.classList.remove('active');
+    });
+    
+    // Deactivate all tab buttons
+    document.querySelectorAll('.tab-button').forEach(btn => {
+      btn.classList.remove('active');
+    });
+    
+    // Show selected tab content
+    document.getElementById(tabId).classList.add('active');
+    
+    // Activate selected button
+    button.classList.add('active');
+  }
+  
+  // Function to refresh sensor data
+  function refreshData(sensorId) {
+    const button = event.currentTarget;
+    const refreshIcon = button.querySelector('.refresh-icon');
+    
+    // Add spinning animation to the refresh button
+    button.classList.add('spinning');
+    
+    // Emit a request for updated data
+    const socket = io();
+    socket.emit('requestSensorData', { sensorId: sensorId });
+    
+    // Remove spinning class after 1 second
+    setTimeout(() => {
+      button.classList.remove('spinning');
+    }, 1000);
+  }
+  
+  // Check if sensor settings were updated based on current DOM
+  function updateSensorLastUpdated(sensorId) {
+    const now = new Date();
+    const formattedTime = now.toLocaleTimeString('ja-JP', {
+      hour: '2-digit', 
+      minute: '2-digit', 
+      second: '2-digit'
+    });
+    
+    // Update both data and sensor last-updated indicators
+    const dataUpdatedElement = document.getElementById(`data-last-updated-${sensorId}`);
+    if (dataUpdatedElement) {
+      dataUpdatedElement.textContent = `最終更新: ${formattedTime}`;
+      dataUpdatedElement.classList.add('timestamp-updated');
+      setTimeout(() => {
+        dataUpdatedElement.classList.remove('timestamp-updated');
       }, 2000);
     }
   }
