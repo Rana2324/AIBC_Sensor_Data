@@ -5,37 +5,139 @@ const socketService = require('../services/socketService');
 
 exports.renderSensorData = async (req, res) => {
   try {
-    // Set limit to null to fetch all available data points
-    const latestReadings = await SensorData.getLatestReadings(null);
+    // Set up collection references using the specified database and collection names
+    const db = mongoose.connection.db;
+    const temperatureReadings = db.collection('temperature_readings');
+    const alertsLog = db.collection('alerts_log');
+    const personalityHistory = db.collection('personality_history');
 
-    // Get the last update timestamp from any sensor
-    const TemperatureReading = mongoose.model('TemperatureReading');
-    const lastUpdate = await TemperatureReading
-      .findOne()
-      .sort({ timestamp: -1 })
-      .select('timestamp');
-
+    // Get distinct sensor IDs from temperature readings
+    const sensorIds = await temperatureReadings.distinct('sensor_id');
+    
+    // Prepare the structure for the latest readings
+    const latestReadings = [];
+    
+    // For each sensor, fetch its latest data
+    for (const sensorId of sensorIds) {
+      // Get the 100 latest temperature readings for this sensor
+      const data = await temperatureReadings
+        .find({ sensor_id: sensorId })
+        .sort({ created_at: -1 })
+        .limit(100)
+        .toArray();
+      
+      // Process each reading to add necessary fields
+      const processedData = data.map(reading => {
+        // Get timestamp from created_at field or fallback to timestamp field
+        const timestamp = reading.created_at ? new Date(reading.created_at) : 
+                         (reading.timestamp ? new Date(reading.timestamp) : new Date());
+        
+        // Use date and time fields if available, otherwise format the timestamp
+        const acquisitionDate = reading.date || timestamp.toLocaleDateString('ja-JP');
+        const acquisitionTime = reading.time || timestamp.toLocaleTimeString('ja-JP');
+        
+        // Map temperature_data to temperatures array if needed
+        const temperatures = reading.temperature_data || reading.temperatures || [];
+        
+        // Calculate if temperature is abnormal
+        const validTemps = temperatures.filter(temp => temp !== null && temp !== undefined);
+        const isAbnormal = validTemps.some(temp => temp < 20 || temp > 26) ||
+          Math.max(...validTemps) - Math.min(...validTemps) > 5;
+        
+        // Calculate average temperature
+        let averageTemperature = null;
+        if (validTemps.length > 0) {
+          averageTemperature = validTemps.reduce((sum, temp) => Number(sum) + Number(temp), 0) / validTemps.length;
+        }
+        
+        return {
+          sensorId: sensorId,
+          acquisitionDate,
+          acquisitionTime,
+          temperatures: temperatures,
+          isAbnormal,
+          averageTemperature,
+          // Keep additional fields that might be useful
+          alert_flag: reading.alert_flag
+        };
+      });
+      
+      // Get the 10 latest alerts for this sensor
+      const alerts = await alertsLog
+        .find({ sensor_id: sensorId })
+        .sort({ created_at: -1 })
+        .limit(10)
+        .toArray()
+        .then(alerts => alerts.map(alert => ({
+          sensorId: sensorId,
+          date: alert.date || new Date(alert.created_at || alert.timestamp).toLocaleDateString('ja-JP'),
+          time: alert.time || new Date(alert.created_at || alert.timestamp).toLocaleTimeString('ja-JP'),
+          event: alert.event || alert.alertReason || alert.message || 'Unknown alert',
+          eventType: alert.eventType || alert.status || ''
+        })));
+      
+      // Get the 10 latest personality history entries for this sensor
+      const personality = await personalityHistory
+        .find({ sensor_id: sensorId })
+        .sort({ created_at: -1 })
+        .limit(10)
+        .toArray()
+        .then(items => items.map(item => ({
+          sensorId: sensorId,
+          date: item.date || new Date(item.created_at || item.timestamp).toLocaleDateString('ja-JP'),
+          time: item.time || new Date(item.created_at || item.timestamp).toLocaleTimeString('ja-JP'),
+          content: item.content || formatPersonalityContent(item)
+        })));
+      
+      // Check if sensor is active (had data in the last 1 second)
+      const now = new Date();
+      const oneSecondAgo = new Date(now.getTime() - 1000);
+      const latestReading = data[0]; // First item is the latest due to sort order
+      const isActive = latestReading && (
+        (latestReading.created_at && new Date(latestReading.created_at) > oneSecondAgo) || 
+        (latestReading.timestamp && new Date(latestReading.timestamp) > oneSecondAgo)
+      );
+      
+      // Add this sensor's data to the latestReadings array
+      latestReadings.push({
+        sensorId,
+        data: processedData,
+        alerts,
+        personality,
+        isActive,
+        // Add settings if you have them in a separate collection
+        settings: [] // Add logic to fetch settings if needed
+      });
+    }
+    
+    // Get the overall last update timestamp
+    const lastUpdateReading = await temperatureReadings
+      .find()
+      .sort({ created_at: -1 })
+      .limit(1)
+      .toArray();
+    
     // Count active sensors
     const now = new Date();
-    const fiveSecondsAgo = new Date(now.getTime() - 5000);
-    const activeSensorCount = await TemperatureReading
-      .distinct('sensorId', {
-        timestamp: { $gt: fiveSecondsAgo }
+    const oneSecondAgo = new Date(now.getTime() - 1000);
+    const activeReadings = await temperatureReadings
+      .distinct('sensor_id', { 
+        $or: [
+          { created_at: { $gt: oneSecondAgo } },
+          { timestamp: { $gt: oneSecondAgo } }
+        ] 
       });
-
-    // Get total count of data points
-    const totalDataPoints = {};
-    for (const reading of latestReadings) {
-      totalDataPoints[reading.sensorId] = reading.data.length;
-    }
-
+    
     res.render("sensorData", {
       latestReadings,
       serverStats: {
-        lastUpdateTime: lastUpdate ? lastUpdate.timestamp : null,
+        lastUpdateTime: lastUpdateReading[0]?.created_at || lastUpdateReading[0]?.timestamp || null,
         totalSensors: latestReadings.length,
-        activeSensors: activeSensorCount.length,
-        totalDataPoints
+        activeSensors: activeReadings.length,
+        totalDataPoints: latestReadings.reduce((acc, sensor) => {
+          acc[sensor.sensorId] = sensor.data.length;
+          return acc;
+        }, {})
       }
     });
   } catch (error) {
@@ -44,38 +146,69 @@ exports.renderSensorData = async (req, res) => {
   }
 };
 
+// Helper function to format personality content
+function formatPersonalityContent(item) {
+  if (item.biasType === 'temperature_offset' && item.biasValue) {
+    const offset = item.biasValue.offset;
+    const sign = offset > 0 ? '+' : '';
+    return `温度補正バイアス: ${sign}${offset}°C`;
+  } else if (item.biasType === 'sensitivity' && item.biasValue) {
+    return `感度設定: ${item.biasValue.level}`;
+  } else {
+    return `${item.biasType || 'バイアス'}の設定`;
+  }
+}
+
+// API endpoint to get latest data for all sensors
 exports.getLatestData = async (req, res) => {
   try {
-    const TemperatureReading = mongoose.model('TemperatureReading');
-
+    const db = mongoose.connection.db;
+    const temperatureReadings = db.collection('temperature_readings');
+    
     // Get unique sensor IDs
-    const sensorIds = await TemperatureReading.distinct('sensorId');
-
+    const sensorIds = await temperatureReadings.distinct('sensor_id');
+    
     // For each sensor, get their latest reading and process it
     const latestData = await Promise.all(sensorIds.map(async (sensorId) => {
-      const data = await TemperatureReading
-        .findOne({ sensorId })
-        .sort({ timestamp: -1 });
-
-      if (!data) return null;
-
+      const data = await temperatureReadings
+        .find({ sensor_id: sensorId })
+        .sort({ created_at: -1 })
+        .limit(1)
+        .toArray();
+        
+      if (!data || data.length === 0) return null;
+      const reading = data[0];
+      
+      // Map temperature_data to temperatures array if needed
+      const temperatures = reading.temperature_data || reading.temperatures || [];
+      
       // Calculate abnormality
-      const validTemps = data.temperatures.filter(temp => temp !== null);
+      const validTemps = temperatures.filter(temp => temp !== null && temp !== undefined);
       const isAbnormal = validTemps.some(temp => temp < 20 || temp > 26) ||
         Math.max(...validTemps) - Math.min(...validTemps) > 5;
-
+      
       // Check sensor activity
       const now = new Date();
-      const fiveSecondsAgo = new Date(now.getTime() - 5000);
-      const isActive = new Date(data.timestamp) > fiveSecondsAgo;
-
+      const oneSecondAgo = new Date(now.getTime() - 1000);
+      const isActive = (reading.created_at && new Date(reading.created_at) > oneSecondAgo) ||
+                      (reading.timestamp && new Date(reading.timestamp) > oneSecondAgo);
+      
+      // Calculate average temperature
+      let averageTemperature = null;
+      if (validTemps.length > 0) {
+        averageTemperature = validTemps.reduce((sum, temp) => Number(sum) + Number(temp), 0) / validTemps.length;
+      }
+      
       return {
-        ...data.toObject(),
+        ...reading,
+        sensorId: sensorId,
+        temperatures: temperatures,
         isAbnormal,
-        isActive
+        isActive,
+        averageTemperature
       };
     }));
-
+    
     res.json(latestData.filter(Boolean));
   } catch (error) {
     logger.error("Error in getLatestData controller:", error);
@@ -83,23 +216,45 @@ exports.getLatestData = async (req, res) => {
   }
 };
 
+// API endpoint to get latest data for a specific sensor
 exports.getLatestDataBySensorId = async (req, res) => {
   try {
     const { sensorId } = req.params;
-    // Remove limit to get all data points
-    const latestData = await SensorData.getLatestDataBySensorId(sensorId);
-
-    // Process each reading to add abnormality flags
-    const processedData = latestData.map(reading => {
-      const validTemps = reading.temperatures.filter(temp => temp !== null);
+    const db = mongoose.connection.db;
+    const temperatureReadings = db.collection('temperature_readings');
+    
+    // Get the 100 latest readings for this sensor
+    const data = await temperatureReadings
+      .find({ sensor_id: sensorId })
+      .sort({ created_at: -1 })
+      .limit(100)
+      .toArray();
+    
+    // Process each reading to add necessary fields
+    const processedData = data.map(reading => {
+      // Map temperature_data to temperatures array if needed
+      const temperatures = reading.temperature_data || reading.temperatures || [];
+      
+      // Calculate if temperature is abnormal
+      const validTemps = temperatures.filter(temp => temp !== null && temp !== undefined);
       const isAbnormal = validTemps.some(temp => temp < 20 || temp > 26) ||
         Math.max(...validTemps) - Math.min(...validTemps) > 5;
+      
+      // Calculate average temperature
+      let averageTemperature = null;
+      if (validTemps.length > 0) {
+        averageTemperature = validTemps.reduce((sum, temp) => Number(sum) + Number(temp), 0) / validTemps.length;
+      }
+      
       return {
-        ...reading.toObject(),
-        isAbnormal
+        ...reading,
+        sensorId: sensorId,
+        temperatures: temperatures,
+        isAbnormal,
+        averageTemperature
       };
     });
-
+    
     logger.info(`Found ${processedData.length} data points for sensor ${sensorId}`);
     res.json(processedData);
   } catch (error) {
@@ -108,21 +263,26 @@ exports.getLatestDataBySensorId = async (req, res) => {
   }
 };
 
-// Alert handling
+// API endpoint to get alerts
 exports.getAlerts = async (req, res) => {
   try {
-    const Alert = mongoose.model('Alert');
-    const alerts = await Alert
+    const db = mongoose.connection.db;
+    const alertsLog = db.collection('alerts_log');
+    
+    const alerts = await alertsLog
       .find()
-      .sort({ timestamp: -1 })
-      .limit(10);
-
+      .sort({ created_at: -1 })
+      .limit(10)
+      .toArray();
+    
     const formattedAlerts = alerts.map(alert => ({
-      ...alert.toObject(),
-      date: new Date(alert.timestamp).toLocaleDateString('ja-JP'),
-      time: new Date(alert.timestamp).toLocaleTimeString('ja-JP')
+      ...alert,
+      sensorId: alert.sensor_id,
+      date: alert.date || new Date(alert.created_at || alert.timestamp).toLocaleDateString('ja-JP'),
+      time: alert.time || new Date(alert.created_at || alert.timestamp).toLocaleTimeString('ja-JP'),
+      event: alert.event || alert.alertReason || alert.message || 'Unknown alert'
     }));
-
+    
     res.json(formattedAlerts);
   } catch (error) {
     logger.error("Error fetching alerts:", error);
@@ -130,43 +290,44 @@ exports.getAlerts = async (req, res) => {
   }
 };
 
-// Settings handling
+// API endpoint to get settings
 exports.getSettings = async (req, res) => {
   try {
-    const Setting = mongoose.model('Setting');
-    const settings = await Setting
-      .find()
-      .sort({ timestamp: -1 })
-      .limit(10);
-
-    const formattedSettings = settings.map(setting => ({
-      ...setting.toObject(),
-      date: new Date(setting.timestamp).toLocaleDateString('ja-JP'),
-      time: new Date(setting.timestamp).toLocaleTimeString('ja-JP')
-    }));
-
-    res.json(formattedSettings);
+    const db = mongoose.connection.db;
+    // Note: Since you didn't specify a settings collection name,
+    // I'm assuming it might be stored within another collection or doesn't exist yet
+    // You may need to adjust this based on your actual data structure
+    
+    // For now, return an empty array to prevent errors
+    const settings = [];
+    
+    res.json(settings);
   } catch (error) {
     logger.error("Error fetching settings:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
 
-// Personality data handling
+// API endpoint to get personality data
 exports.getPersonalityData = async (req, res) => {
   try {
-    const Personality = mongoose.model('Personality');
-    const data = await Personality
+    const db = mongoose.connection.db;
+    const personalityHistory = db.collection('personality_history');
+    
+    const data = await personalityHistory
       .find()
-      .sort({ timestamp: -1 })
-      .limit(10);
-
+      .sort({ created_at: -1 })
+      .limit(10)
+      .toArray();
+    
     const formattedData = data.map(item => ({
-      ...item.toObject(),
-      date: new Date(item.timestamp).toLocaleDateString('ja-JP'),
-      time: new Date(item.timestamp).toLocaleTimeString('ja-JP')
+      ...item,
+      sensorId: item.sensor_id,
+      date: item.date || new Date(item.created_at || item.timestamp).toLocaleDateString('ja-JP'),
+      time: item.time || new Date(item.created_at || item.timestamp).toLocaleTimeString('ja-JP'),
+      content: item.content || formatPersonalityContent(item)
     }));
-
+    
     res.json(formattedData);
   } catch (error) {
     logger.error("Error fetching personality data:", error);
@@ -174,10 +335,9 @@ exports.getPersonalityData = async (req, res) => {
   }
 };
 
-// Add new controller method for dashboard
+// Add dashboard render controller if needed
 exports.renderDashboard = async (req, res) => {
   try {
-    // Render the dashboard template (no need to pre-load data as it will be loaded via Socket.io)
     res.render("dashboard", {
       title: "Real-Time Sensor Dashboard"
     });
@@ -187,28 +347,30 @@ exports.renderDashboard = async (req, res) => {
   }
 };
 
-// Get the latest 100 alert records for the dashboard
+// Get the latest alert records for the dashboard
 exports.getLatestAlertData = async (req, res) => {
   try {
-    const Alert = mongoose.model('Alert');
-
-    // Get the latest 100 alert records
-    const alertData = await Alert
+    const db = mongoose.connection.db;
+    const alertsLog = db.collection('alerts_log');
+    
+    const alertData = await alertsLog
       .find({})
-      .sort({ timestamp: -1 })
-      .limit(100);
-
-    // Format the data for display
+      .sort({ created_at: -1 })
+      .limit(100)
+      .toArray();
+    
     const formattedData = alertData.map(record => ({
-      sensorId: record.sensorId,
-      date: record.date ? new Date(record.date).toLocaleDateString('ja-JP') :
+      sensorId: record.sensor_id,
+      date: record.date ? record.date :
+        record.created_at ? new Date(record.created_at).toLocaleDateString('ja-JP') : 
         record.timestamp ? new Date(record.timestamp).toLocaleDateString('ja-JP') : '-',
-      time: record.date ? new Date(record.date).toLocaleTimeString('ja-JP') :
+      time: record.time ? record.time :
+        record.created_at ? new Date(record.created_at).toLocaleTimeString('ja-JP') :
         record.timestamp ? new Date(record.timestamp).toLocaleTimeString('ja-JP') : '-',
-      alertReason: record.alertReason || record.event || '-',
+      alertReason: record.alertReason || record.event || record.message || '-',
       status: record.status || record.eventType || 'UNKNOWN'
     }));
-
+    
     logger.info(`Returning ${formattedData.length} alert records for dashboard`);
     res.json(formattedData);
   } catch (error) {

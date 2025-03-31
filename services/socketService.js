@@ -113,77 +113,77 @@ const startDataPolling = () => {
     // Poll for temperature data every 1 second
     pollingInterval = setInterval(async () => {
         try {
-            // Check for new data for each sensorId
+            const startTime = Date.now(); // Track execution time
+            
+            // Get latest temperature readings for all sensors
             const TemperatureReading = mongoose.model('TemperatureReading');
             const sensorIds = await TemperatureReading.distinct('sensorId');
             
-            let newDataFound = false;
-            
+            // For each sensor, get their latest readings (up to 100)
             for (const sensorId of sensorIds) {
-                // Query for any new data since the last timestamp we've seen
-                const lastTimestamp = lastDataTimestamps[sensorId] || new Date(0);
-                
-                const newData = await TemperatureReading
-                    .find({ 
-                        sensorId,
-                        timestamp: { $gt: lastTimestamp }
-                    })
-                    .sort({ timestamp: -1 });
-                
-                if (newData.length > 0) {
-                    // We have new data for this sensor!
-                    newDataFound = true;
-                    logger.info(`Found ${newData.length} new readings for sensor ${sensorId}`);
+                const latestReadings = await TemperatureReading
+                    .find({ sensorId })
+                    .sort({ timestamp: -1 })
+                    .limit(100);
                     
+                if (latestReadings.length > 0) {
                     // Update our last seen timestamp
-                    lastDataTimestamps[sensorId] = newData[0].timestamp;
+                    const newTimestamp = latestReadings[0].timestamp;
+                    const lastTimestamp = lastDataTimestamps[sensorId];
                     
-                    // Option 1: Emit each new reading
-                    newData.forEach(reading => {
-                        emitSensorData(reading);
-                    });
-                    
-                    // Option 2: Broadcast an event indicating new data is available
-                    // This will cause connected clients to request a full refresh
-                    io.emit('newDataAvailable', { sensorId, count: newData.length });
+                    // If this is new data or we don't have a timestamp yet, broadcast it
+                    if (!lastTimestamp || newTimestamp > lastTimestamp) {
+                        lastDataTimestamps[sensorId] = newTimestamp;
+                        
+                        // Broadcast the complete dataset to all clients
+                        io.emit('sensorDataUpdate', {
+                            sensorId,
+                            readings: latestReadings
+                        });
+                        
+                        logger.info(`Broadcast ${latestReadings.length} readings for sensor ${sensorId}`);
+                    }
                 }
             }
             
-            // If new data was found for any sensor, broadcast notification
-            if (newDataFound) {
-                io.emit('dataUpdated', { timestamp: new Date() });
-            }
-            
-            // Check for recent alerts
+            // Get the 10 most recent alerts
             const Alert = mongoose.model('Alert');
             const latestAlerts = await Alert
-                .find({ timestamp: { $gt: new Date(Date.now() - 60000) } }) // Alerts from last minute
-                .sort({ timestamp: -1 });
+                .find({})
+                .sort({ timestamp: -1 })
+                .limit(10);
                 
-            latestAlerts.forEach(alert => {
-                emitAlert(alert);
-            });
+            // Broadcast alerts to all clients
+            io.emit('alertsUpdate', latestAlerts);
             
-            // Check for recent settings changes
+            // Get the 10 most recent settings changes
             const Setting = mongoose.model('Setting');
             const latestSettings = await Setting
-                .find({ timestamp: { $gt: new Date(Date.now() - 60000) } }) // Settings from last minute
-                .sort({ timestamp: -1 });
+                .find({})
+                .sort({ timestamp: -1 })
+                .limit(10);
                 
-            latestSettings.forEach(setting => {
-                emitSettingChange(setting);
-            });
+            // Broadcast settings to all clients
+            io.emit('settingsUpdate', latestSettings);
             
-            // Check for recent personality updates
+            // Get the 10 most recent personality updates
             const Personality = mongoose.model('Personality');
             const latestPersonality = await Personality
-                .find({ timestamp: { $gt: new Date(Date.now() - 60000) } }) // Updates from last minute
-                .sort({ timestamp: -1 });
+                .find({})
+                .sort({ timestamp: -1 })
+                .limit(10);
                 
-            latestPersonality.forEach(item => {
-                emitPersonalityUpdate(item);
-            });
+            // Broadcast personality updates to all clients
+            io.emit('personalityUpdate', latestPersonality);
             
+            // Send a heartbeat to clients to update the "last updated" timestamp
+            io.emit('dataHeartbeat', { timestamp: new Date() });
+            
+            // Log execution time for performance monitoring
+            const executionTime = Date.now() - startTime;
+            if (executionTime > 500) { // If execution takes more than 500ms, log a warning
+                logger.warn(`Data polling took ${executionTime}ms to execute`);
+            }
         } catch (error) {
             logger.error('Error in data polling:', error);
         }

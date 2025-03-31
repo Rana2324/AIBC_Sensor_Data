@@ -15,10 +15,7 @@ const dbConfig = {
 
 async function connectDB() {
   try {
-    await mongoose.connect(dbConfig.uri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
+    await mongoose.connect(dbConfig.uri);
     console.log('Connected to MongoDB Atlas using Mongoose');
   } catch (error) {
     console.error('MongoDB connection error:', error);
