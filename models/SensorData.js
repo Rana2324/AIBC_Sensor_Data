@@ -121,7 +121,7 @@ class SensorData {
                   alert.timestamp ? new Date(alert.timestamp).toLocaleDateString('ja-JP') : '-',
             time: alert.date ? new Date(alert.date).toLocaleTimeString('ja-JP') :
                  alert.timestamp ? new Date(alert.timestamp).toLocaleTimeString('ja-JP') : '-',
-            event: alert.event || alert.alertReason || '-',
+            event: alert.alert_reason || alert.alertReason || '-',
             eventType: alert.eventType || alert.status || '-'
           })),
           settings: settings.map(setting => ({

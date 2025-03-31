@@ -72,7 +72,7 @@ exports.renderSensorData = async (req, res) => {
           sensorId: sensorId,
           date: alert.date || new Date(alert.created_at || alert.timestamp).toLocaleDateString('ja-JP'),
           time: alert.time || new Date(alert.created_at || alert.timestamp).toLocaleTimeString('ja-JP'),
-          event: alert.event || alert.alertReason || alert.message || 'Unknown alert',
+          event: alert.alert_reason || alert.alertReason || alert.message || 'Unknown alert',
           eventType: alert.eventType || alert.status || ''
         })));
       
@@ -89,13 +89,13 @@ exports.renderSensorData = async (req, res) => {
           content: item.content || formatPersonalityContent(item)
         })));
       
-      // Check if sensor is active (had data in the last 1 second)
+      // Check if sensor is active (had data in the last 5 minutes)
       const now = new Date();
-      const oneSecondAgo = new Date(now.getTime() - 1000);
+      const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000); // 5 minutes window
       const latestReading = data[0]; // First item is the latest due to sort order
       const isActive = latestReading && (
-        (latestReading.created_at && new Date(latestReading.created_at) > oneSecondAgo) || 
-        (latestReading.timestamp && new Date(latestReading.timestamp) > oneSecondAgo)
+        (latestReading.created_at && new Date(latestReading.created_at) > fiveMinutesAgo) || 
+        (latestReading.timestamp && new Date(latestReading.timestamp) > fiveMinutesAgo)
       );
       
       // Add this sensor's data to the latestReadings array
@@ -280,7 +280,7 @@ exports.getAlerts = async (req, res) => {
       sensorId: alert.sensor_id,
       date: alert.date || new Date(alert.created_at || alert.timestamp).toLocaleDateString('ja-JP'),
       time: alert.time || new Date(alert.created_at || alert.timestamp).toLocaleTimeString('ja-JP'),
-      event: alert.event || alert.alertReason || alert.message || 'Unknown alert'
+      event: alert.alert_reason || alert.alertReason || alert.message || 'Unknown alert'
     }));
     
     res.json(formattedAlerts);

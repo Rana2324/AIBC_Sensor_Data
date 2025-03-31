@@ -216,12 +216,66 @@ body {
   box-shadow: var(--shadow-lg);
 }
 
+/* Sensor header styling */
+.sensor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 15px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--gray-200);
+}
+
 .sensor-title {
-  font-size: 20px;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  font-size: 1.5rem;
   color: var(--dark);
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 2px solid var(--primary);
+}
+
+.sensor-icon {
+  margin-right: 10px;
+  font-size: 1.8rem;
+}
+
+/* Sensor status indicator */
+.sensor-status {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+}
+
+.sensor-status::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+.sensor-status.active {
+  background-color: rgba(76, 175, 80, 0.1);
+  color: #4CAF50;
+}
+
+.sensor-status.active::before {
+  background-color: #4CAF50;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+  animation: pulse 2s infinite;
+}
+
+.sensor-status.inactive {
+  background-color: rgba(158, 158, 158, 0.1);
+  color: #9E9E9E;
+}
+
+.sensor-status.inactive::before {
+  background-color: #9E9E9E;
 }
 
 /* === HISTORY TABLE STYLES === */
@@ -518,45 +572,47 @@ body {
   margin-bottom: 8px;
 }
 
+.controls-right {
+  display: flex;
+  align-items: center;
+}
+
 .refresh-btn {
   background: none;
   border: none;
-  color: #4a90e2;
   cursor: pointer;
-  font-size: 18px;
-  padding: 4px;
+  color: #555;
+  font-size: 1.1rem;
+  padding: 5px;
   border-radius: 50%;
-  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
 }
 
 .refresh-btn:hover {
-  background-color: #e3f2fd;
+  background-color: rgba(0, 0, 0, 0.05);
+  transform: scale(1.1);
 }
 
 .refresh-btn.spinning .refresh-icon {
-  animation: spin 1s infinite linear;
+  animation: spin 1s linear infinite;
 }
 
-/* Animations */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
+@keyframes pulse {
+  0% {
     opacity: 1;
-    transform: translateY(0);
+    transform: scale(1);
   }
-}
-
-@keyframes expandTable {
-  from { max-height: 150px; }
-  to { max-height: 400px; }
-}
-
-@keyframes collapseTable {
-  from { max-height: 400px; }
-  to { max-height: 150px; }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.2);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes spin {
@@ -564,130 +620,80 @@ body {
   to { transform: rotate(360deg); }
 }
 
-/* Responsive Styles */
-@media (max-width: 768px) {
-  .container {
-    padding: 12px;
-  }
-  
-  .tab-nav {
-    flex-direction: row;
-    padding: 8px;
-    gap: 6px;
-  }
-  
-  .tab-button {
-    padding: 12px 20px;
-    font-size: 14px;
-    min-width: 120px;
-  }
-  
-  .tab-icon {
-    font-size: 1.1em;
-  }
-  
-  .sensor-data-section {
-    padding: 16px;
-  }
-  
-  .table-wrapper {
-    max-height: 300px;
-  }
-  
-  .data-table th,
-  .data-table td {
-    padding: 8px 10px;
-    font-size: 14px;
-  }
-  
-  .server-stats {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-  
-  .alert-table, 
-  .settings-table, 
-  .personality-table {
-    max-height: 120px;
-  }
-  
-  .alert-table.expanded, 
-  .settings-table.expanded, 
-  .personality-table.expanded {
-    max-height: 300px;
-  }
-  
-  .history-section-header {
-    padding: 8px 12px;
-  }
-  
-  .history-section-header h3 {
-    font-size: 14px;
-  }
-  
-  .expand-btn {
-    padding: 4px 8px;
-    font-size: 12px;
-  }
+/* Table row enter animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-@media (max-width: 1280px) {
-  .sensor-panels {
-    grid-template-columns: 1fr;
-  }
+tbody tr:first-child {
+  animation: fadeIn 0.3s ease-out;
 }
 
-/* Sensor Panels Grid Layout */
-.sensor-panels {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
-  gap: 24px;
-  padding: 16px;
+/* Highlight new data briefly */
+.new-data {
+  background-color: rgba(76, 175, 80, 0.1);
+  transition: background-color 2s;
 }
 
-/* Sensor Header Styles */
-.sensor-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
+/* Alert flash animation */
+@keyframes alertFlash {
+  0% { background-color: rgba(255, 0, 0, 0.2); }
+  100% { background-color: transparent; }
 }
 
-.sensor-status {
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 14px;
-  font-weight: 500;
+.alert-flash {
+  animation: alertFlash 2s;
+}
+
+/* Real-time indicator styles */
+.realtime-indicator {
   display: flex;
   align-items: center;
-  gap: 6px;
+  font-size: 0.8rem;
+  color: #4CAF50;
+  margin-right: 10px;
 }
 
-.sensor-status::before {
-  content: '';
-  display: inline-block;
+.realtime-dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
-  margin-right: 4px;
-}
-
-.sensor-status.active {
-  background-color: rgba(76, 175, 80, 0.1);
-  color: #4CAF50;
-}
-
-.sensor-status.active::before {
   background-color: #4CAF50;
-  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+  border-radius: 50%;
+  margin-right: 5px;
+  animation: pulse 2s infinite;
 }
 
-.sensor-status.inactive {
-  background-color: rgba(244, 67, 54, 0.1);
-  color: #F44336;
+/* Active pulse effect when new data is received */
+.realtime-dot.active-pulse {
+  animation: strongPulse 1s ease-out;
+  background-color: #FF5722;
 }
 
-.sensor-status.inactive::before {
-  background-color: #F44336;
-  box-shadow: 0 0 0 2px rgba(244, 67, 54, 0.2);
+@keyframes strongPulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(255, 87, 34, 0.7);
+  }
+  50% {
+    transform: scale(1.5);
+    opacity: 0.7;
+    box-shadow: 0 0 0 10px rgba(255, 87, 34, 0);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(255, 87, 34, 0);
+    background-color: #4CAF50;
+  }
 }
+
+/* Last updated timestamp style */
+.last-updated {
+  font-size: 0.75rem;
+  color: #757575;
+  margin-right: 10px;
+}
+
+
