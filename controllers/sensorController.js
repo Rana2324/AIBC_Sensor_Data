@@ -45,11 +45,8 @@ exports.renderSensorData = async (req, res) => {
         const isAbnormal = validTemps.some(temp => temp < 20 || temp > 26) ||
           Math.max(...validTemps) - Math.min(...validTemps) > 5;
         
-        // Calculate average temperature
-        let averageTemperature = null;
-        if (validTemps.length > 0) {
-          averageTemperature = validTemps.reduce((sum, temp) => Number(sum) + Number(temp), 0) / validTemps.length;
-        }
+        // Use temperature_ave from the database instead of calculating average
+        const temperature_ave = reading.temperature_ave !== undefined ? reading.temperature_ave : null;
         
         return {
           sensorId: sensorId,
@@ -57,7 +54,7 @@ exports.renderSensorData = async (req, res) => {
           acquisitionTime,
           temperatures: temperatures,
           isAbnormal,
-          averageTemperature,
+          temperature_ave,
           // Keep additional fields that might be useful
           alert_flag: reading.alert_flag
         };
@@ -206,19 +203,15 @@ exports.getLatestData = async (req, res) => {
       const isActive = (reading.created_at && new Date(reading.created_at) > oneSecondAgo) ||
                       (reading.timestamp && new Date(reading.timestamp) > oneSecondAgo);
       
-      // Calculate average temperature
-      let averageTemperature = null;
-      if (validTemps.length > 0) {
-        averageTemperature = validTemps.reduce((sum, temp) => Number(sum) + Number(temp), 0) / validTemps.length;
-      }
+      // Use temperature_ave from database instead of calculating averageTemperature
+      const temperature_ave = reading.temperature_ave !== undefined ? reading.temperature_ave : null;
       
       return {
         ...reading,
         sensorId: sensorId,
         temperatures: temperatures,
         isAbnormal,
-        isActive,
-        averageTemperature
+        temperature_ave
       };
     }));
     
@@ -253,18 +246,15 @@ exports.getLatestDataBySensorId = async (req, res) => {
       const isAbnormal = validTemps.some(temp => temp < 20 || temp > 26) ||
         Math.max(...validTemps) - Math.min(...validTemps) > 5;
       
-      // Calculate average temperature
-      let averageTemperature = null;
-      if (validTemps.length > 0) {
-        averageTemperature = validTemps.reduce((sum, temp) => Number(sum) + Number(temp), 0) / validTemps.length;
-      }
+      // Use temperature_ave from database instead of calculating averageTemperature
+      const temperature_ave = reading.temperature_ave !== undefined ? reading.temperature_ave : null;
       
       return {
         ...reading,
         sensorId: sensorId,
         temperatures: temperatures,
         isAbnormal,
-        averageTemperature
+        temperature_ave
       };
     });
     

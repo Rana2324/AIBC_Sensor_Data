@@ -71,7 +71,7 @@
                           <% data.temperatures.forEach(temp => { %>
                           <td><%= temp !== null ? temp.toFixed(1) : '--' %></td>
                           <% }); %>
-                          <td><%= data.averageTemperature !== null ? data.averageTemperature.toFixed(1) : '--' %> °C</td>
+                          <td><%= data.temperature_ave !== null ? data.temperature_ave.toFixed(1) : '--' %> °C</td>
                           <td><%= data.isAbnormal ? '異常' : '正常' %></td>
                         </tr>
                         <% }); %>
@@ -286,17 +286,25 @@
       }
     });
     
+    // Track last received data timestamps per sensor to avoid duplicate updates
+    const lastReceivedTimestamps = {};
+    
     // Data event handlers
     socket.on('fullSensorData', (data) => {
       console.log('Received full sensor data:', data.sensorId);
-      handleFullSensorData(data);
-      pulseRealTimeIndicator(data.sensorId);
+      if (handleFullSensorData(data)) {
+        // Only pulse if there's new data
+        pulseRealTimeIndicator(data.sensorId);
+      }
     });
     
     socket.on('sensorDataUpdate', (data) => {
       console.log('Received sensor data update:', data.sensorId);
-      handleFullSensorData(data);
-      pulseRealTimeIndicator(data.sensorId);
+      // Check if this is actually new data
+      const isNewData = handleFullSensorData(data, lastReceivedTimestamps);
+      if (isNewData) {
+        pulseRealTimeIndicator(data.sensorId);
+      }
     });
     
     socket.on('fullAlertsData', (data) => {
@@ -306,21 +314,24 @@
     
     socket.on('alertsUpdate', (data) => {
       console.log('Received alerts update');
-      handleFullAlertsData(data);
+      // Check if this contains new alerts
+      const newAlerts = handleFullAlertsData(data, true);
       
-      // Group alerts by sensor
-      const alertsBySensor = {};
-      data.forEach(alert => {
-        if (!alert.sensorId) return;
-        if (!alertsBySensor[alert.sensorId]) {
-          alertsBySensor[alert.sensorId] = [];
+      if (newAlerts && newAlerts.length > 0) {
+        // Group alerts by sensor
+        const alertsBySensor = {};
+        newAlerts.forEach(alert => {
+          if (!alert.sensorId) return;
+          if (!alertsBySensor[alert.sensorId]) {
+            alertsBySensor[alert.sensorId] = [];
+          }
+          alertsBySensor[alert.sensorId].push(alert);
+        });
+        
+        // Pulse indicators for each affected sensor
+        for (const sensorId in alertsBySensor) {
+          pulseRealTimeIndicator(sensorId, 'alert');
         }
-        alertsBySensor[alert.sensorId].push(alert);
-      });
-      
-      // Pulse indicators for each affected sensor
-      for (const sensorId in alertsBySensor) {
-        pulseRealTimeIndicator(sensorId, 'alert');
       }
     });
     
@@ -346,16 +357,15 @@
     
     socket.on('dataHeartbeat', (data) => {
       console.log('Received heartbeat:', data.timestamp);
-      // Update all 'last updated' indicators
+      // Just update timestamps without pulsing indicators
       document.querySelectorAll('.last-updated').forEach(el => {
-        const now = new Date();
-        const formattedTime = now.toLocaleTimeString('ja-JP', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit'
-        });
-        
-        if (!el.id.includes('data-last-updated')) {
+        if (!el.id.includes('data-last-updated') && !el.id.includes('alert-last-updated')) {
+          const now = new Date();
+          const formattedTime = now.toLocaleTimeString('ja-JP', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+          });
           el.textContent = `最終更新: ${formattedTime}`;
         }
       });
@@ -377,11 +387,31 @@
   }
   
   // Data handling functions for real-time updates
-  function handleFullSensorData(data) {
-    if (!data || !data.sensorId || !Array.isArray(data.readings)) return;
+  function handleFullSensorData(data, timestampTracker) {
+    if (!data || !data.sensorId || !Array.isArray(data.readings)) return false;
     
     const tbody = document.getElementById(`tbody-${data.sensorId}`);
-    if (!tbody) return;
+    if (!tbody) return false;
+    
+    // Check if this is actually new data by comparing latest timestamp
+    let isNewData = false;
+    if (data.readings.length > 0) {
+      const latestTimestamp = new Date(data.readings[0].timestamp).getTime();
+      
+      // If we're tracking timestamps between calls
+      if (timestampTracker) {
+        const prevTimestamp = timestampTracker[data.sensorId];
+        // Only consider as new data if timestamp is newer or we have no previous record
+        isNewData = !prevTimestamp || latestTimestamp > prevTimestamp;
+        if (isNewData) {
+          timestampTracker[data.sensorId] = latestTimestamp;
+        } else {
+          console.log(`Ignoring data for ${data.sensorId} - not new (${new Date(latestTimestamp).toISOString()} vs ${new Date(prevTimestamp).toISOString()})`);
+        }
+      } else {
+        isNewData = true;
+      }
+    }
     
     // Clear existing rows
     tbody.innerHTML = '';
@@ -418,8 +448,8 @@
       
       // Create average temperature cell
       const avgTempCell = document.createElement('td');
-      avgTempCell.textContent = reading.averageTemperature !== undefined && reading.averageTemperature !== null 
-        ? `${reading.averageTemperature.toFixed(1)} °C` 
+      avgTempCell.textContent = reading.temperature_ave !== undefined && reading.temperature_ave !== null 
+        ? `${reading.temperature_ave.toFixed(1)} °C` 
         : '--';
       tr.appendChild(avgTempCell);
       
@@ -431,12 +461,19 @@
       tbody.appendChild(tr);
     });
     
-    // Update last refresh time for this sensor
-    updateSensorLastUpdated(data.sensorId);
+    // Only update timestamp indicators if this is new data
+    if (isNewData) {
+      updateSensorLastUpdated(data.sensorId);
+    }
+    
+    return isNewData;  // Return whether this was actually new data
   }
   
-  function handleFullAlertsData(alerts) {
-    if (!Array.isArray(alerts)) return;
+  function handleFullAlertsData(alerts, checkForNewOnly = false) {
+    if (!Array.isArray(alerts)) return [];
+    
+    // Track new alerts to determine if we should pulse the indicator
+    const newAlerts = checkForNewOnly ? [] : null;
     
     // Group alerts by sensor ID
     const alertsBySensor = {};
@@ -447,6 +484,34 @@
         alertsBySensor[alert.sensorId] = [];
       }
       alertsBySensor[alert.sensorId].push(alert);
+      
+      // If we're tracking new alerts
+      if (checkForNewOnly && newAlerts) {
+        // Check if we've seen this alert before by comparing with existing DOM content
+        const alertsTable = document.getElementById(`alerts-${alert.sensorId}`);
+        if (alertsTable) {
+          const alertTimestamp = new Date(alert.timestamp || Date.now()).getTime();
+          const alertContent = alert.alert_reason || alert.event || alert.alertReason || '';
+          
+          // Check existing table contents for this alert (simple check)
+          let existingAlert = false;
+          const rows = alertsTable.querySelectorAll('tr');
+          for (let i = 0; i < rows.length; i++) {
+            const cells = rows[i].querySelectorAll('td');
+            if (cells.length >= 3) {
+              const content = cells[2].textContent;
+              if (content === alertContent) {
+                existingAlert = true;
+                break;
+              }
+            }
+          }
+          
+          if (!existingAlert) {
+            newAlerts.push(alert);
+          }
+        }
+      }
     });
     
     // Update each sensor's alerts table
@@ -503,173 +568,45 @@
         alertsTable.appendChild(tr);
       }
     }
+    
+    return newAlerts;  // Return any new alerts we found
   }
   
-  function handleFullSettingsData(settings) {
-    if (!Array.isArray(settings)) return;
+  // Function to pulse the real-time indicator
+  function pulseRealTimeIndicator(sensorId, type = '') {
+    const indicatorId = type ? `${type}-realtime-indicator-${sensorId}` : `realtime-indicator-${sensorId}`;
+    const indicator = document.getElementById(indicatorId);
     
-    // Group settings by sensor ID
-    const settingsBySensor = {};
-    settings.forEach(setting => {
-      if (!setting.sensorId) return;
+    if (indicator) {
+      // Add a stronger pulse effect by adding this class
+      const dot = indicator.querySelector('.realtime-dot');
+      dot.classList.add('active-pulse');
       
-      if (!settingsBySensor[setting.sensorId]) {
-        settingsBySensor[setting.sensorId] = [];
+      // Also make the text brighter for more visibility
+      const text = indicator.querySelector('.realtime-text');
+      if (text) {
+        text.classList.add('active-text');
+        setTimeout(() => {
+          text.classList.remove('active-text');
+        }, 1500);
       }
-      settingsBySensor[setting.sensorId].push(setting);
-    });
-    
-    // Update each sensor's settings table
-    for (const sensorId in settingsBySensor) {
-      const settingsTable = document.getElementById(`settings-${sensorId}`);
-      if (!settingsTable) continue;
       
-      // Clear existing rows
-      settingsTable.innerHTML = '';
+      // Remove pulse class after animation completes
+      setTimeout(() => {
+        dot.classList.remove('active-pulse');
+      }, 1000);
       
-      // Add new rows
-      settingsBySensor[sensorId].forEach(setting => {
-        const tr = document.createElement('tr');
-        
-        // Format date and time if needed
-        let date = setting.date || '';
-        let time = setting.time || '';
-        
-        if (!date || !time) {
-          const timestamp = new Date(setting.timestamp || Date.now());
-          date = date || timestamp.toLocaleDateString('ja-JP');
-          time = time || timestamp.toLocaleTimeString('ja-JP');
-        }
-        
-        // Create date cell
-        const dateCell = document.createElement('td');
-        dateCell.textContent = date;
-        tr.appendChild(dateCell);
-        
-        // Create time cell
-        const timeCell = document.createElement('td');
-        timeCell.textContent = time;
-        tr.appendChild(timeCell);
-        
-        // Create content cell - Use the format from the sample data
-        const contentCell = document.createElement('td');
-        if (setting.content) {
-          // Use existing content if available
-          contentCell.textContent = setting.content;
-        } else if (setting.changeType && setting.value !== undefined) {
-          // Format like "読取間隔変更: 2951ms"
-          contentCell.textContent = `${setting.changeType}: ${setting.value}`;
-        } else {
-          contentCell.textContent = '設定変更';
-        }
-        
-        tr.appendChild(contentCell);
-        
-        settingsTable.appendChild(tr);
-      });
-      
-      // Add "no settings" message if empty
-      if (settingsBySensor[sensorId].length === 0) {
-        const tr = document.createElement('tr');
-        tr.className = 'empty-table-row';
-        
-        const td = document.createElement('td');
-        td.colSpan = 3;
-        td.textContent = '設定変更履歴はありません';
-        
-        tr.appendChild(td);
-        settingsTable.appendChild(tr);
+      // Also update timestamp for this type of indicator
+      if (type === 'alert') {
+        updateAlertLastUpdated(sensorId);
+      } else {
+        updateDataLastUpdated(sensorId);
       }
     }
   }
   
-  function handleFullPersonalityData(personalityData) {
-    if (!Array.isArray(personalityData)) return;
-    
-    // Group personality data by sensor ID
-    const personalityBySensor = {};
-    personalityData.forEach(item => {
-      if (!item.sensorId) return;
-      
-      if (!personalityBySensor[item.sensorId]) {
-        personalityBySensor[item.sensorId] = [];
-      }
-      personalityBySensor[item.sensorId].push(item);
-    });
-    
-    // Update each sensor's personality table
-    for (const sensorId in personalityBySensor) {
-      const personalityTable = document.getElementById(`personality-${sensorId}`);
-      if (!personalityTable) continue;
-      
-      // Clear existing rows
-      personalityTable.innerHTML = '';
-      
-      // Add new rows
-      personalityBySensor[sensorId].forEach(item => {
-        const tr = document.createElement('tr');
-        
-        // Format date and time if needed
-        let date = item.date || '';
-        let time = item.time || '';
-        
-        if (!date || !time) {
-          const timestamp = new Date(item.timestamp || Date.now());
-          date = date || timestamp.toLocaleDateString('ja-JP');
-          time = time || timestamp.toLocaleTimeString('ja-JP');
-        }
-        
-        // Create date cell
-        const dateCell = document.createElement('td');
-        dateCell.textContent = date;
-        tr.appendChild(dateCell);
-        
-        // Create time cell
-        const timeCell = document.createElement('td');
-        timeCell.textContent = time;
-        tr.appendChild(timeCell);
-        
-        // Create content cell - Use exact format from sample data
-        const contentCell = document.createElement('td');
-        if (item.content) {
-          // Use existing content if available (like "感度設定: 中")
-          contentCell.textContent = item.content;
-        } else if (item.biasType === 'sensitivity' && item.biasValue && item.biasValue.level) {
-          // Format like "感度設定: 中"
-          contentCell.textContent = `感度設定: ${item.biasValue.level}`;
-        } else if (item.biasType && item.biasValue) {
-          // Generic formatting
-          contentCell.textContent = `${item.biasType}: ${
-            typeof item.biasValue === 'object' ? 
-              (item.biasValue.level || JSON.stringify(item.biasValue)) : 
-              item.biasValue
-          }`;
-        } else {
-          contentCell.textContent = 'バイアス設定';
-        }
-        
-        tr.appendChild(contentCell);
-        
-        personalityTable.appendChild(tr);
-      });
-      
-      // Add "no personality data" message if empty
-      if (personalityBySensor[sensorId].length === 0) {
-        const tr = document.createElement('tr');
-        tr.className = 'empty-table-row';
-        
-        const td = document.createElement('td');
-        td.colSpan = 3;
-        td.textContent = 'バイアス設定履歴はありません';
-        
-        tr.appendChild(td);
-        personalityTable.appendChild(tr);
-      }
-    }
-  }
-  
-  // Update last updated timestamp for a specific sensor
-  function updateSensorLastUpdated(sensorId) {
+  // Update last updated timestamp for a specific sensor with highlight effect
+  function updateDataLastUpdated(sensorId) {
     const now = new Date();
     const formattedTime = now.toLocaleTimeString('ja-JP', {
       hour: '2-digit',
@@ -680,79 +617,12 @@
     const lastUpdatedElement = document.getElementById(`data-last-updated-${sensorId}`);
     if (lastUpdatedElement) {
       lastUpdatedElement.textContent = `最終更新: ${formattedTime}`;
-    }
-  }
-  
-  // Handle refresh button click
-  function refreshData(sensorId) {
-    console.log(`Refreshing data for sensor: ${sensorId}`);
-    
-    // Add spinning class to the refresh button
-    const refreshBtn = document.querySelector(`#sensor-${sensorId} .refresh-btn`);
-    if (refreshBtn) {
-      refreshBtn.classList.add('spinning');
       
-      // Remove spinning class after 1 second
+      // Add highlight effect to timestamp
+      lastUpdatedElement.classList.add('timestamp-updated');
       setTimeout(() => {
-        refreshBtn.classList.remove('spinning');
-      }, 1000);
-    }
-    
-    // Request full data through socket
-    const socket = io(); // Get the socket instance
-    socket.emit('requestFullData');
-  }
-  
-  // Toggle expand/collapse of tables
-  function toggleTableExpand(wrapperId) {
-    const wrapper = document.getElementById(wrapperId);
-    if (wrapper) {
-      wrapper.classList.toggle('expanded');
-      
-      // Update toggle button text
-      const toggleBtn = wrapper.previousElementSibling.querySelector('.expand-btn');
-      const toggleText = toggleBtn.querySelector('.toggle-text');
-      
-      if (wrapper.classList.contains('expanded')) {
-        toggleText.textContent = '折りたたむ';
-      } else {
-        toggleText.textContent = '展開';
-      }
-    }
-  }
-  
-  // Initialize tabs
-  function switchTab(tabId, button) {
-    // Hide all tabs
-    document.querySelectorAll('.tab-content').forEach(tab => {
-      tab.classList.remove('active');
-    });
-    
-    // Deactivate all buttons
-    document.querySelectorAll('.tab-button').forEach(btn => {
-      btn.classList.remove('active');
-    });
-    
-    // Show selected tab
-    document.getElementById(tabId).classList.add('active');
-    
-    // Activate selected button
-    button.classList.add('active');
-  }
-  
-  // Function to pulse the real-time indicator
-  function pulseRealTimeIndicator(sensorId, type = '') {
-    const indicatorId = type ? `${type}-realtime-indicator-${sensorId}` : `realtime-indicator-${sensorId}`;
-    const indicator = document.getElementById(indicatorId);
-    
-    if (indicator) {
-      // Add a stronger pulse effect by adding this class
-      indicator.querySelector('.realtime-dot').classList.add('active-pulse');
-      
-      // Remove it after animation completes
-      setTimeout(() => {
-        indicator.querySelector('.realtime-dot').classList.remove('active-pulse');
-      }, 1000);
+        lastUpdatedElement.classList.remove('timestamp-updated');
+      }, 2000);
     }
   }
 </script>
