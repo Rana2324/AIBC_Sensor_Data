@@ -1,7 +1,9 @@
 <div class="container">
   <h1>温度センサー監視システム</h1>
   
-  
+  <div class="connection-status connected" id="connection-status">
+    接続済み
+  </div>
   
   <!-- Tab Navigation -->
   <div class="tab-container">
@@ -35,7 +37,6 @@
                 
                 <!-- Raw Data History -->
                 <div class="sensor-data-section">
-                 
                   <div class="section-controls">
                     <h3>取得データ履歴 <span class="data-count">(最新100件)</span></h3>
                     <div class="controls-right">
@@ -106,7 +107,7 @@
                       <tr class="<%= alert.eventType?.includes('RECOVERY') ? 'alert-recovery' : 'alert-row' %>">
                         <td><%= alert.date || '-' %></td>
                         <td><%= alert.time || '-' %></td>
-                        <td><%= alert.alert_reason || alert.event || alert.alertReason || '-' %></td>
+                        <td><%= alert.alert_reason ||  '-' %></td>
                       </tr>
                       <% }); %>
                       <% if ((sensor.alerts || []).length === 0) { %>
@@ -245,7 +246,136 @@
   </div>
 </div>
 
+<script src="/socket.io/socket.io.js"></script>
 <script>
+  // Initialize when DOM is ready
+  document.addEventListener('DOMContentLoaded', () => {
+    // Initialize tabs - make the first tab active by default
+    const defaultTabId = 'sensorTab';
+    const defaultTabBtn = document.getElementById('sensorTabBtn');
+    
+    if (defaultTabBtn && document.getElementById(defaultTabId)) {
+      document.getElementById(defaultTabId).classList.add('active');
+      defaultTabBtn.classList.add('active');
+    }
+    
+    // Setup Socket.IO functionality
+    setupSocketIO();
+  });
+
+  // Setup Socket.IO functionality
+  function setupSocketIO() {
+    const socket = io();
+    
+    // Connection status indicators
+    socket.on('connect', () => {
+      console.log('Connected to server');
+      const connectionStatus = document.getElementById('connection-status');
+      if (connectionStatus) {
+        connectionStatus.textContent = '接続済み';
+        connectionStatus.className = 'connection-status connected';
+      }
+    });
+    
+    socket.on('disconnect', () => {
+      console.log('Disconnected from server');
+      const connectionStatus = document.getElementById('connection-status');
+      if (connectionStatus) {
+        connectionStatus.textContent = '切断';
+        connectionStatus.className = 'connection-status disconnected';
+      }
+    });
+    
+    // Data event handlers
+    socket.on('fullSensorData', (data) => {
+      console.log('Received full sensor data:', data.sensorId);
+      handleFullSensorData(data);
+      pulseRealTimeIndicator(data.sensorId);
+    });
+    
+    socket.on('sensorDataUpdate', (data) => {
+      console.log('Received sensor data update:', data.sensorId);
+      handleFullSensorData(data);
+      pulseRealTimeIndicator(data.sensorId);
+    });
+    
+    socket.on('fullAlertsData', (data) => {
+      console.log('Received full alerts data');
+      handleFullAlertsData(data);
+    });
+    
+    socket.on('alertsUpdate', (data) => {
+      console.log('Received alerts update');
+      handleFullAlertsData(data);
+      
+      // Group alerts by sensor
+      const alertsBySensor = {};
+      data.forEach(alert => {
+        if (!alert.sensorId) return;
+        if (!alertsBySensor[alert.sensorId]) {
+          alertsBySensor[alert.sensorId] = [];
+        }
+        alertsBySensor[alert.sensorId].push(alert);
+      });
+      
+      // Pulse indicators for each affected sensor
+      for (const sensorId in alertsBySensor) {
+        pulseRealTimeIndicator(sensorId, 'alert');
+      }
+    });
+    
+    socket.on('fullSettingsData', (data) => {
+      console.log('Received full settings data');
+      handleFullSettingsData(data);
+    });
+    
+    socket.on('settingsUpdate', (data) => {
+      console.log('Received settings update');
+      handleFullSettingsData(data);
+    });
+    
+    socket.on('fullPersonalityData', (data) => {
+      console.log('Received full personality data');
+      handleFullPersonalityData(data);
+    });
+    
+    socket.on('personalityUpdate', (data) => {
+      console.log('Received personality update');
+      handleFullPersonalityData(data);
+    });
+    
+    socket.on('dataHeartbeat', (data) => {
+      console.log('Received heartbeat:', data.timestamp);
+      // Update all 'last updated' indicators
+      document.querySelectorAll('.last-updated').forEach(el => {
+        const now = new Date();
+        const formattedTime = now.toLocaleTimeString('ja-JP', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        });
+        
+        if (!el.id.includes('data-last-updated')) {
+          el.textContent = `最終更新: ${formattedTime}`;
+        }
+      });
+    });
+    
+    // Setup automatic refresh every 60 seconds
+    setInterval(() => {
+      if (socket.connected) {
+        console.log('Auto-refreshing data...');
+        socket.emit('requestFullData');
+      }
+    }, 60000);
+    
+    // Initial data request on connection
+    socket.on('connect', () => {
+      console.log('Requesting initial data...');
+      socket.emit('requestFullData');
+    });
+  }
+  
   // Data handling functions for real-time updates
   function handleFullSensorData(data) {
     if (!data || !data.sensorId || !Array.isArray(data.readings)) return;
@@ -421,9 +551,18 @@
         timeCell.textContent = time;
         tr.appendChild(timeCell);
         
-        // Create content cell
+        // Create content cell - Use the format from the sample data
         const contentCell = document.createElement('td');
-        contentCell.textContent = setting.content || `${setting.changeType}: ${JSON.stringify(setting.value)}`;
+        if (setting.content) {
+          // Use existing content if available
+          contentCell.textContent = setting.content;
+        } else if (setting.changeType && setting.value !== undefined) {
+          // Format like "読取間隔変更: 2951ms"
+          contentCell.textContent = `${setting.changeType}: ${setting.value}`;
+        } else {
+          contentCell.textContent = '設定変更';
+        }
+        
         tr.appendChild(contentCell);
         
         settingsTable.appendChild(tr);
@@ -490,9 +629,25 @@
         timeCell.textContent = time;
         tr.appendChild(timeCell);
         
-        // Create content cell
+        // Create content cell - Use exact format from sample data
         const contentCell = document.createElement('td');
-        contentCell.textContent = item.content || `${item.biasType}: ${item.biasValue && item.biasValue.level ? item.biasValue.level : JSON.stringify(item.biasValue)}`;
+        if (item.content) {
+          // Use existing content if available (like "感度設定: 中")
+          contentCell.textContent = item.content;
+        } else if (item.biasType === 'sensitivity' && item.biasValue && item.biasValue.level) {
+          // Format like "感度設定: 中"
+          contentCell.textContent = `感度設定: ${item.biasValue.level}`;
+        } else if (item.biasType && item.biasValue) {
+          // Generic formatting
+          contentCell.textContent = `${item.biasType}: ${
+            typeof item.biasValue === 'object' ? 
+              (item.biasValue.level || JSON.stringify(item.biasValue)) : 
+              item.biasValue
+          }`;
+        } else {
+          contentCell.textContent = 'バイアス設定';
+        }
+        
         tr.appendChild(contentCell);
         
         personalityTable.appendChild(tr);
@@ -583,134 +738,6 @@
     
     // Activate selected button
     button.classList.add('active');
-  }
-  
-  // Initialize when DOM is ready
-  document.addEventListener('DOMContentLoaded', () => {
-    // Initialize tabs - make the first tab active by default
-    const defaultTabId = 'sensorTab';
-    const defaultTabBtn = document.getElementById('sensorTabBtn');
-    
-    if (defaultTabBtn && document.getElementById(defaultTabId)) {
-      document.getElementById(defaultTabId).classList.add('active');
-      defaultTabBtn.classList.add('active');
-    }
-    
-    // Set up Socket.IO and auto-refresh
-    setupSocketIO();
-  });
-  
-  // Setup Socket.IO functionality
-  function setupSocketIO() {
-    const socket = io();
-    
-    // Connection status indicators
-    socket.on('connect', () => {
-      console.log('Connected to server');
-      const connectionStatus = document.getElementById('connection-status');
-      if (connectionStatus) {
-        connectionStatus.textContent = '接続済み';
-        connectionStatus.className = 'connection-status connected';
-      }
-    });
-    
-    socket.on('disconnect', () => {
-      console.log('Disconnected from server');
-      const connectionStatus = document.getElementById('connection-status');
-      if (connectionStatus) {
-        connectionStatus.textContent = '切断';
-        connectionStatus.className = 'connection-status disconnected';
-      }
-    });
-    
-    // Data event handlers
-    socket.on('fullSensorData', (data) => {
-      console.log('Received full sensor data:', data.sensorId);
-      handleFullSensorData(data);
-      pulseRealTimeIndicator(data.sensorId);
-    });
-    
-    socket.on('sensorDataUpdate', (data) => {
-      console.log('Received sensor data update:', data.sensorId);
-      handleFullSensorData(data);
-      pulseRealTimeIndicator(data.sensorId);
-    });
-    
-    socket.on('fullAlertsData', (data) => {
-      console.log('Received full alerts data');
-      handleFullAlertsData(data);
-    });
-    
-    socket.on('alertsUpdate', (data) => {
-      console.log('Received alerts update');
-      handleFullAlertsData(data);
-      
-      // Group alerts by sensor
-      const alertsBySensor = {};
-      data.forEach(alert => {
-        if (!alert.sensorId) return;
-        if (!alertsBySensor[alert.sensorId]) {
-          alertsBySensor[alert.sensorId] = [];
-        }
-        alertsBySensor[alert.sensorId].push(alert);
-      });
-      
-      // Pulse indicators for each affected sensor
-      for (const sensorId in alertsBySensor) {
-        pulseRealTimeIndicator(sensorId, 'alert');
-      }
-    });
-    
-    socket.on('fullSettingsData', (data) => {
-      console.log('Received full settings data');
-      handleFullSettingsData(data);
-    });
-    
-    socket.on('settingsUpdate', (data) => {
-      console.log('Received settings update');
-      handleFullSettingsData(data);
-    });
-    
-    socket.on('fullPersonalityData', (data) => {
-      console.log('Received full personality data');
-      handleFullPersonalityData(data);
-    });
-    
-    socket.on('personalityUpdate', (data) => {
-      console.log('Received personality update');
-      handleFullPersonalityData(data);
-    });
-    
-    socket.on('dataHeartbeat', (data) => {
-      console.log('Received heartbeat:', data.timestamp);
-      // Update all 'last updated' indicators
-      document.querySelectorAll('.last-updated').forEach(el => {
-        const now = new Date();
-        const formattedTime = now.toLocaleTimeString('ja-JP', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit'
-        });
-        
-        if (!el.id.includes('data-last-updated')) {
-          el.textContent = `最終更新: ${formattedTime}`;
-        }
-      });
-    });
-    
-    // Setup automatic refresh every 60 seconds
-    setInterval(() => {
-      if (socket.connected) {
-        console.log('Auto-refreshing data...');
-        socket.emit('requestFullData');
-      }
-    }, 60000);
-    
-    // Initial data request on connection
-    socket.on('connect', () => {
-      console.log('Requesting initial data...');
-      socket.emit('requestFullData');
-    });
   }
   
   // Function to pulse the real-time indicator

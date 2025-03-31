@@ -83,10 +83,27 @@ const sendFullAlertsDataset = async (socket) => {
 
 const sendFullSettingsDataset = async (socket) => {
     try {
-        const Setting = mongoose.model('Setting');
-        const settings = await Setting.find().sort({ timestamp: -1 }).limit(100);
-        socket.emit('fullSettingsData', settings);
-        logger.info(`Sent full settings dataset (${settings.length} settings)`);
+        // Use the direct MongoDB connection instead of the Mongoose model
+        const db = mongoose.connection.db;
+        const settingsHistory = db.collection('settings_history');
+        
+        const settings = await settingsHistory
+            .find()
+            .sort({ timestamp: -1 })
+            .limit(100)
+            .toArray();
+            
+        // Format settings data for the frontend
+        const formattedSettings = settings.map(item => ({
+            ...item,
+            sensorId: item.sensor_id || item.sensorId,
+            date: item.date || new Date(item.timestamp || item.created_at || Date.now()).toLocaleDateString('ja-JP'),
+            time: item.time || new Date(item.timestamp || item.created_at || Date.now()).toLocaleTimeString('ja-JP'),
+            content: item.content || `${item.changeType || 'Setting'}: ${item.value !== undefined ? item.value : JSON.stringify(item.value)}`
+        }));
+        
+        socket.emit('fullSettingsData', formattedSettings);
+        logger.info(`Sent full settings dataset (${formattedSettings.length} settings)`);
     } catch (error) {
         logger.error('Error sending full settings dataset:', error);
     }
@@ -94,14 +111,46 @@ const sendFullSettingsDataset = async (socket) => {
 
 const sendFullPersonalityDataset = async (socket) => {
     try {
-        const Personality = mongoose.model('Personality');
-        const personalities = await Personality.find().sort({ timestamp: -1 }).limit(100);
-        socket.emit('fullPersonalityData', personalities);
-        logger.info(`Sent full personality dataset (${personalities.length} items)`);
+        // Use the direct MongoDB connection instead of the Mongoose model
+        const db = mongoose.connection.db;
+        const personalityHistory = db.collection('personality_history');
+        
+        const personalities = await personalityHistory
+            .find()
+            .sort({ timestamp: -1 })
+            .limit(100)
+            .toArray();
+            
+        // Format personality data for the frontend
+        const formattedPersonalities = personalities.map(item => ({
+            ...item,
+            sensorId: item.sensor_id || item.sensorId,
+            date: item.date || new Date(item.timestamp || item.created_at || Date.now()).toLocaleDateString('ja-JP'),
+            time: item.time || new Date(item.timestamp || item.created_at || Date.now()).toLocaleTimeString('ja-JP'),
+            content: item.content || formatPersonalityContent(item)
+        }));
+        
+        socket.emit('fullPersonalityData', formattedPersonalities);
+        logger.info(`Sent full personality dataset (${formattedPersonalities.length} items)`);
     } catch (error) {
         logger.error('Error sending full personality dataset:', error);
     }
 };
+
+// Helper function to format personality content
+function formatPersonalityContent(item) {
+    if (item.biasType === 'temperature_offset' && item.biasValue) {
+        const offset = item.biasValue.offset;
+        const sign = offset > 0 ? '+' : '';
+        return `温度補正バイアス: ${sign}${offset}°C`;
+    } else if (item.biasType === 'sensitivity' && item.biasValue) {
+        return `感度設定: ${item.biasValue.level}`;
+    } else if (item.biasType && item.biasValue) {
+        return `${item.biasType}: ${JSON.stringify(item.biasValue)}`;
+    } else {
+        return `${item.biasType || 'バイアス'}の設定`;
+    }
+}
 
 // Poll database for updates and emit to clients
 const startDataPolling = () => {
@@ -115,20 +164,47 @@ const startDataPolling = () => {
         try {
             const startTime = Date.now(); // Track execution time
             
-            // Get latest temperature readings for all sensors
-            const TemperatureReading = mongoose.model('TemperatureReading');
-            const sensorIds = await TemperatureReading.distinct('sensorId');
+            // Get direct access to MongoDB collections
+            const db = mongoose.connection.db;
+            const temperatureReadings = db.collection('temperature_readings');
+            const alertsLog = db.collection('alerts_log');
+            const settingsHistory = db.collection('settings_history');
+            const personalityHistory = db.collection('personality_history');
+            
+            // Get unique sensor IDs
+            const sensorIds = await temperatureReadings.distinct('sensor_id');
             
             // For each sensor, get their latest readings (up to 100)
             for (const sensorId of sensorIds) {
-                const latestReadings = await TemperatureReading
-                    .find({ sensorId })
-                    .sort({ timestamp: -1 })
-                    .limit(100);
+                const latestReadings = await temperatureReadings
+                    .find({ sensor_id: sensorId })
+                    .sort({ created_at: -1 })
+                    .limit(100)
+                    .toArray();
                     
                 if (latestReadings.length > 0) {
+                    // Process readings to add formatted fields
+                    const processedReadings = latestReadings.map(reading => {
+                        // Format timestamp
+                        const timestamp = reading.created_at || reading.timestamp || new Date();
+                        
+                        // Process temperatures
+                        const temperatures = reading.temperature_data || reading.temperatures || [];
+                        const validTemps = temperatures.filter(temp => temp !== null && temp !== undefined);
+                        const isAbnormal = validTemps.some(temp => temp < 20 || temp > 26) ||
+                                         (validTemps.length > 1 && Math.max(...validTemps) - Math.min(...validTemps) > 5);
+                        
+                        return {
+                            ...reading,
+                            sensorId: sensorId,
+                            timestamp: timestamp,
+                            temperatures: temperatures,
+                            isAbnormal: isAbnormal
+                        };
+                    });
+                    
                     // Update our last seen timestamp
-                    const newTimestamp = latestReadings[0].timestamp;
+                    const newTimestamp = new Date(latestReadings[0].created_at || latestReadings[0].timestamp);
                     const lastTimestamp = lastDataTimestamps[sensorId];
                     
                     // If this is new data or we don't have a timestamp yet, broadcast it
@@ -138,43 +214,71 @@ const startDataPolling = () => {
                         // Broadcast the complete dataset to all clients
                         io.emit('sensorDataUpdate', {
                             sensorId,
-                            readings: latestReadings
+                            readings: processedReadings
                         });
                         
-                        logger.info(`Broadcast ${latestReadings.length} readings for sensor ${sensorId}`);
+                        logger.info(`Broadcast ${processedReadings.length} readings for sensor ${sensorId}`);
                     }
                 }
             }
             
             // Get the 10 most recent alerts
-            const Alert = mongoose.model('Alert');
-            const latestAlerts = await Alert
+            const latestAlerts = await alertsLog
                 .find({})
-                .sort({ timestamp: -1 })
-                .limit(10);
+                .sort({ created_at: -1 })
+                .limit(10)
+                .toArray();
+            
+            // Format alerts
+            const formattedAlerts = latestAlerts.map(alert => ({
+                ...alert,
+                sensorId: alert.sensor_id,
+                date: alert.date || new Date(alert.created_at || alert.timestamp || Date.now()).toLocaleDateString('ja-JP'),
+                time: alert.time || new Date(alert.created_at || alert.timestamp || Date.now()).toLocaleTimeString('ja-JP'),
+                event: alert.alert_reason || alert.alertReason || alert.message || 'Unknown alert',
+                eventType: alert.eventType || alert.status || ''
+            }));
                 
             // Broadcast alerts to all clients
-            io.emit('alertsUpdate', latestAlerts);
+            io.emit('alertsUpdate', formattedAlerts);
             
             // Get the 10 most recent settings changes
-            const Setting = mongoose.model('Setting');
-            const latestSettings = await Setting
+            const latestSettings = await settingsHistory
                 .find({})
-                .sort({ timestamp: -1 })
-                .limit(10);
+                .sort({ timestamp: -1, created_at: -1 })
+                .limit(10)
+                .toArray();
+                
+            // Format settings
+            const formattedSettings = latestSettings.map(item => ({
+                ...item,
+                sensorId: item.sensor_id || item.sensorId,
+                date: item.date || new Date(item.timestamp || item.created_at || Date.now()).toLocaleDateString('ja-JP'),
+                time: item.time || new Date(item.timestamp || item.created_at || Date.now()).toLocaleTimeString('ja-JP'),
+                content: item.content || `${item.changeType || 'Setting'}: ${item.value !== undefined ? item.value : JSON.stringify(item.value)}`
+            }));
                 
             // Broadcast settings to all clients
-            io.emit('settingsUpdate', latestSettings);
+            io.emit('settingsUpdate', formattedSettings);
             
             // Get the 10 most recent personality updates
-            const Personality = mongoose.model('Personality');
-            const latestPersonality = await Personality
+            const latestPersonality = await personalityHistory
                 .find({})
-                .sort({ timestamp: -1 })
-                .limit(10);
+                .sort({ timestamp: -1, created_at: -1 })
+                .limit(10)
+                .toArray();
+                
+            // Format personality data
+            const formattedPersonality = latestPersonality.map(item => ({
+                ...item,
+                sensorId: item.sensor_id || item.sensorId,
+                date: item.date || new Date(item.timestamp || item.created_at || Date.now()).toLocaleDateString('ja-JP'),
+                time: item.time || new Date(item.timestamp || item.created_at || Date.now()).toLocaleTimeString('ja-JP'),
+                content: item.content || formatPersonalityContent(item)
+            }));
                 
             // Broadcast personality updates to all clients
-            io.emit('personalityUpdate', latestPersonality);
+            io.emit('personalityUpdate', formattedPersonality);
             
             // Send a heartbeat to clients to update the "last updated" timestamp
             io.emit('dataHeartbeat', { timestamp: new Date() });
@@ -255,10 +359,15 @@ const emitSettingChange = (data) => {
             ...(data.toObject ? data.toObject() : data),
             date: new Date(data.timestamp || new Date()).toLocaleDateString('ja-JP'),
             time: new Date(data.timestamp || new Date()).toLocaleTimeString('ja-JP'),
-            content: data.content || `${data.changeType}: ${JSON.stringify(data.value)}`
+            // Use existing content field or create one from changeType and value
+            content: data.content || 
+                    (data.changeType && data.value ? 
+                        `${data.changeType}: ${typeof data.value === 'object' ? 
+                            JSON.stringify(data.value) : data.value}` : 
+                        'Setting changed')
         };
         io.emit('settingChange', setting);
-        logger.info(`Emitted setting change for ${data.sensorId}`);
+        logger.info(`Emitted setting change for ${data.sensorId}: ${setting.content}`);
     } catch (error) {
         logger.error('Error emitting setting change:', error);
     }
@@ -272,10 +381,14 @@ const emitPersonalityUpdate = (data) => {
             ...(data.toObject ? data.toObject() : data),
             date: new Date(data.timestamp || new Date()).toLocaleDateString('ja-JP'),
             time: new Date(data.timestamp || new Date()).toLocaleTimeString('ja-JP'),
-            content: data.content || `${data.biasType}: ${data.biasValue && data.biasValue.level ? data.biasValue.level : JSON.stringify(data.biasValue)}`
+            // Use existing content field or create one from biasType and biasValue
+            content: data.content || 
+                    (data.biasType && data.biasValue ? 
+                        `${data.biasType}: ${data.biasValue.level || JSON.stringify(data.biasValue)}` :
+                        'Personality updated')
         };
         io.emit('personalityUpdate', update);
-        logger.info(`Emitted personality update for ${data.sensorId}`);
+        logger.info(`Emitted personality update for ${data.sensorId}: ${update.content}`);
     } catch (error) {
         logger.error('Error emitting personality update:', error);
     }

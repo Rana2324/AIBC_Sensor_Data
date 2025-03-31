@@ -10,6 +10,7 @@ exports.renderSensorData = async (req, res) => {
     const temperatureReadings = db.collection('temperature_readings');
     const alertsLog = db.collection('alerts_log');
     const personalityHistory = db.collection('personality_history');
+    const settingsHistory = db.collection('settings_history');  // Add settings_history collection reference
 
     // Get distinct sensor IDs from temperature readings
     const sensorIds = await temperatureReadings.distinct('sensor_id');
@@ -98,6 +99,19 @@ exports.renderSensorData = async (req, res) => {
         (latestReading.timestamp && new Date(latestReading.timestamp) > fiveMinutesAgo)
       );
       
+      // Get the 10 latest settings for this sensor
+      const settings = await settingsHistory
+        .find({ sensor_id: sensorId })
+        .sort({ timestamp: -1, created_at: -1 })
+        .limit(10)
+        .toArray()
+        .then(items => items.map(item => ({
+          sensorId: sensorId,
+          date: item.date || new Date(item.timestamp || item.created_at || Date.now()).toLocaleDateString('ja-JP'),
+          time: item.time || new Date(item.timestamp || item.created_at || Date.now()).toLocaleTimeString('ja-JP'),
+          content: item.content || `${item.changeType || 'Setting'}: ${item.value !== undefined ? item.value : JSON.stringify(item.value)}`
+        })));
+      
       // Add this sensor's data to the latestReadings array
       latestReadings.push({
         sensorId,
@@ -105,8 +119,7 @@ exports.renderSensorData = async (req, res) => {
         alerts,
         personality,
         isActive,
-        // Add settings if you have them in a separate collection
-        settings: [] // Add logic to fetch settings if needed
+        settings: settings // Use the fetched settings data
       });
     }
     
@@ -294,14 +307,24 @@ exports.getAlerts = async (req, res) => {
 exports.getSettings = async (req, res) => {
   try {
     const db = mongoose.connection.db;
-    // Note: Since you didn't specify a settings collection name,
-    // I'm assuming it might be stored within another collection or doesn't exist yet
-    // You may need to adjust this based on your actual data structure
+    const settingsHistory = db.collection('settings_history');
     
-    // For now, return an empty array to prevent errors
-    const settings = [];
+    const settingsData = await settingsHistory
+      .find()
+      .sort({ timestamp: -1, created_at: -1 })
+      .limit(10)
+      .toArray();
     
-    res.json(settings);
+    const formattedSettings = settingsData.map(item => ({
+      ...item,
+      sensorId: item.sensor_id || item.sensorId,
+      date: item.date || new Date(item.timestamp || item.created_at || Date.now()).toLocaleDateString('ja-JP'),
+      time: item.time || new Date(item.timestamp || item.created_at || Date.now()).toLocaleTimeString('ja-JP'),
+      content: item.content || `${item.changeType || 'Setting'}: ${item.value !== undefined ? item.value : JSON.stringify(item.value)}`
+    }));
+    
+    logger.info(`Returning ${formattedSettings.length} setting records`);
+    res.json(formattedSettings);
   } catch (error) {
     logger.error("Error fetching settings:", error);
     res.status(500).json({ error: "Internal Server Error" });
