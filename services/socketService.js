@@ -1,9 +1,210 @@
 let io;
 const logger = require('../config/logger');
 const mongoose = require('mongoose');
+const os = require('os');
 let pollingInterval;
+let serverStatsInterval;
 let lastDataTimestamps = {}; // Track last seen data timestamps per sensor
 
+// Server statistics functions (defined at the top so they're available throughout the file)
+async function sendServerStats(socket) {
+    try {
+        const stats = await collectServerStats();
+        socket.emit('serverStats', stats);
+        
+        const performanceStats = collectPerformanceStats();
+        socket.emit('performanceStats', performanceStats);
+        
+        const dataStats = await collectDataStats();
+        socket.emit('dataStats', dataStats);
+        
+        logger.info('Sent server statistics to client');
+    } catch (error) {
+        logger.error('Error sending server statistics:', error);
+    }
+}
+
+async function collectServerStats() {
+    try {
+        const db = mongoose.connection.db;
+        const temperatureReadings = db.collection('temperature_readings');
+        
+        // Get sensor counts
+        const sensorIds = await temperatureReadings.distinct('sensor_id');
+        const totalSensors = sensorIds.length;
+        
+        // Consider a sensor active if it has data in the last 5 minutes
+        const fiveMinutesAgo = new Date();
+        fiveMinutesAgo.setMinutes(fiveMinutesAgo.getMinutes() - 5);
+        
+        let activeSensors = 0;
+        for (const sensorId of sensorIds) {
+            const recentData = await temperatureReadings
+                .find({ 
+                    sensor_id: sensorId,
+                    timestamp: { $gt: fiveMinutesAgo }
+                })
+                .limit(1)
+                .toArray();
+                
+            if (recentData.length > 0) {
+                activeSensors++;
+            }
+        }
+        
+        // Get the timestamp of the most recent data
+        const latestReading = await temperatureReadings
+            .find({})
+            .sort({ timestamp: -1 })
+            .limit(1)
+            .toArray();
+            
+        const lastUpdateTime = latestReading.length > 0 
+            ? latestReading[0].timestamp || latestReading[0].created_at
+            : null;
+            
+        // MongoDB connection status
+        const mongoDbConnected = mongoose.connection.readyState === 1;
+        
+        return {
+            totalSensors,
+            activeSensors,
+            lastUpdateTime,
+            mongoDbConnected
+        };
+    } catch (error) {
+        logger.error('Error collecting server stats:', error);
+        return {
+            totalSensors: 0,
+            activeSensors: 0,
+            lastUpdateTime: null,
+            mongoDbConnected: false
+        };
+    }
+}
+
+function collectPerformanceStats() {
+    try {
+        // CPU usage calculation
+        const cpus = os.cpus();
+        let totalIdle = 0;
+        let totalTick = 0;
+        
+        cpus.forEach(cpu => {
+            for (const type in cpu.times) {
+                totalTick += cpu.times[type];
+            }
+            totalIdle += cpu.times.idle;
+        });
+        
+        const cpuIdle = totalIdle / cpus.length;
+        const cpuTotal = totalTick / cpus.length;
+        const cpuUsage = 100 - (100 * cpuIdle / cpuTotal);
+        
+        // Memory usage
+        const memoryUsage = process.memoryUsage().rss; // Resident Set Size in bytes
+        
+        return {
+            uptime: process.uptime(), // Server uptime in seconds
+            cpuUsage: cpuUsage,
+            memoryUsage: memoryUsage,
+            clientCount: io.engine.clientsCount || 0
+        };
+    } catch (error) {
+        logger.error('Error collecting performance stats:', error);
+        return {
+            uptime: 0,
+            cpuUsage: 0,
+            memoryUsage: 0,
+            clientCount: 0
+        };
+    }
+}
+
+async function collectDataStats() {
+    try {
+        const db = mongoose.connection.db;
+        const temperatureReadings = db.collection('temperature_readings');
+        const alertsLog = db.collection('alerts_log');
+        
+        // Get total data points count
+        const totalDataPoints = await temperatureReadings.countDocuments();
+        
+        // Get today's data points count
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        
+        const todayDataPoints = await temperatureReadings.countDocuments({
+            timestamp: { $gte: startOfToday }
+        });
+        
+        // Get today's alerts count
+        const todayAlerts = await alertsLog.countDocuments({
+            timestamp: { $gte: startOfToday }
+        });
+        
+        // Get database size (not perfectly accurate but a good estimate)
+        const dbStats = await db.stats();
+        const dbSize = dbStats.dataSize;
+        
+        return {
+            totalDataPoints,
+            todayDataPoints,
+            todayAlerts,
+            dbSize
+        };
+    } catch (error) {
+        logger.error('Error collecting data stats:', error);
+        return {
+            totalDataPoints: 0,
+            todayDataPoints: 0,
+            todayAlerts: 0,
+            dbSize: 0
+        };
+    }
+}
+
+async function sendServerStatsToAll() {
+    if (!io) return;
+    
+    try {
+        const stats = await collectServerStats();
+        io.emit('serverStats', stats);
+        
+        const performanceStats = collectPerformanceStats();
+        io.emit('performanceStats', performanceStats);
+        
+        const dataStats = await collectDataStats();
+        io.emit('dataStats', dataStats);
+    } catch (error) {
+        logger.error('Error sending server stats to all clients:', error);
+    }
+}
+
+const startServerStatsMonitoring = () => {
+    // Only start monitoring if it's not already running
+    if (serverStatsInterval) return;
+    
+    logger.info('Starting server stats monitoring (5-second interval)');
+    
+    // Initial send of server stats
+    sendServerStatsToAll();
+    
+    // Then send updated stats every 5 seconds
+    serverStatsInterval = setInterval(() => {
+        sendServerStatsToAll();
+    }, 5000); // Send stats every 5 seconds to reduce server load
+};
+
+const stopServerStatsMonitoring = () => {
+    if (serverStatsInterval) {
+        clearInterval(serverStatsInterval);
+        serverStatsInterval = null;
+        logger.info('Server stats monitoring stopped');
+    }
+};
+
+// Socket.IO connection handling
 const initSocket = (socketIo) => {
     io = socketIo;
     
@@ -15,10 +216,18 @@ const initSocket = (socketIo) => {
 
         // When a client connects, start sending them updates
         startDataPolling();
+        
+        // Start server stats monitoring
+        startServerStatsMonitoring();
 
         // Handle client requesting full data refresh
         socket.on('requestFullData', () => {
             sendFullDataset(socket);
+        });
+        
+        // Handle client requesting server stats
+        socket.on('requestServerStats', async () => {
+            sendServerStats(socket);
         });
 
         socket.on('disconnect', () => {
@@ -27,6 +236,7 @@ const initSocket = (socketIo) => {
             // If no clients are connected, stop polling to save resources
             if (io.engine.clientsCount === 0) {
                 stopDataPolling();
+                stopServerStatsMonitoring();
             }
         });
     });

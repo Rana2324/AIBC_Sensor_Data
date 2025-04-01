@@ -1,12 +1,21 @@
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-  // Initialize tabs - make the first tab active by default
-  const defaultTabId = 'sensorTab';
-  const defaultTabBtn = document.getElementById('sensorTabBtn');
+  // Get active tab from localStorage or default to 'sensorTab'
+  const savedTabId = localStorage.getItem('activeTab') || 'sensorTab';
+  const savedTabBtn = document.getElementById(savedTabId === 'serverTab' ? 'serverTabBtn' : 'sensorTabBtn');
   
-  if (defaultTabBtn && document.getElementById(defaultTabId)) {
-    document.getElementById(defaultTabId).classList.add('active');
-    defaultTabBtn.classList.add('active');
+  if (savedTabBtn && document.getElementById(savedTabId)) {
+    document.getElementById(savedTabId).classList.add('active');
+    savedTabBtn.classList.add('active');
+  } else {
+    // Fallback to default tab if saved tab doesn't exist
+    const defaultTabId = 'sensorTab';
+    const defaultTabBtn = document.getElementById('sensorTabBtn');
+    
+    if (defaultTabBtn && document.getElementById(defaultTabId)) {
+      document.getElementById(defaultTabId).classList.add('active');
+      defaultTabBtn.classList.add('active');
+    }
   }
   
   // Initialize scrollbar overflow indicators
@@ -119,6 +128,24 @@ function setupSocketIO() {
     handleFullPersonalityData(data);
   });
   
+  // Server statistics handlers
+  socket.on('serverStats', (data) => {
+    console.log('Received server stats:', data);
+    updateServerStats(data);
+    pulseServerRealTimeIndicator();
+  });
+  
+  socket.on('performanceStats', (data) => {
+    console.log('Received performance stats:', data);
+    updatePerformanceStats(data);
+    pulseRealTimeIndicator(null, 'performance');
+  });
+  
+  socket.on('dataStats', (data) => {
+    console.log('Received data stats:', data);
+    updateDataStats(data);
+  });
+  
   socket.on('dataHeartbeat', (data) => {
     console.log('Received heartbeat:', data.timestamp);
     // Just update timestamps without pulsing indicators
@@ -140,6 +167,7 @@ function setupSocketIO() {
     if (socket.connected) {
       console.log('Auto-refreshing data...');
       socket.emit('requestFullData');
+      socket.emit('requestServerStats');
     }
   }, 60000);
   
@@ -147,6 +175,7 @@ function setupSocketIO() {
   socket.on('connect', () => {
     console.log('Requesting initial data...');
     socket.emit('requestFullData');
+    socket.emit('requestServerStats');
   });
 }
 
@@ -531,6 +560,9 @@ function switchTab(tabId, button) {
   
   // Activate selected button
   button.classList.add('active');
+  
+  // Save active tab to localStorage
+  localStorage.setItem('activeTab', tabId);
 }
 
 function toggleTableExpand(tableId) {
@@ -732,4 +764,160 @@ function updateSensorStatus(sensorId, isActive) {
       statusElement.classList.remove('status-changed');
     }, 1000);
   }
+}
+
+// Server statistics update functions
+function updateServerStats(data) {
+  if (!data) return;
+  
+  // Update MongoDB connection status
+  const mongodbStatus = document.getElementById('mongodb-status');
+  if (mongodbStatus) {
+    mongodbStatus.textContent = data.mongoDbConnected ? '接続中' : '切断';
+    mongodbStatus.className = data.mongoDbConnected ? 'status-connected' : 'status-disconnected';
+  }
+  
+  // Update sensor counts
+  const sensorCount = document.getElementById('sensor-count');
+  if (sensorCount) {
+    sensorCount.textContent = data.totalSensors || 0;
+  }
+  
+  const activeSensors = document.getElementById('active-sensors');
+  if (activeSensors) {
+    activeSensors.textContent = data.activeSensors || 0;
+  }
+  
+  // Update last data received timestamp
+  const lastDataReceived = document.getElementById('last-data-received');
+  if (lastDataReceived && data.lastUpdateTime) {
+    const date = new Date(data.lastUpdateTime);
+    lastDataReceived.textContent = date.toLocaleString('ja-JP', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  }
+  
+  // Update status last updated timestamp
+  updateTimestamp('status-last-updated');
+}
+
+function updatePerformanceStats(data) {
+  if (!data) return;
+  
+  // Update CPU usage
+  const cpuUsage = document.getElementById('cpu-usage');
+  if (cpuUsage && data.cpuUsage !== undefined) {
+    cpuUsage.textContent = `${data.cpuUsage.toFixed(1)}%`;
+  }
+  
+  // Update memory usage
+  const memoryUsage = document.getElementById('memory-usage');
+  if (memoryUsage && data.memoryUsage !== undefined) {
+    memoryUsage.textContent = `${(data.memoryUsage / (1024 * 1024)).toFixed(2)} MB`;
+  }
+  
+  // Update uptime
+  const uptime = document.getElementById('uptime');
+  if (uptime && data.uptime !== undefined) {
+    uptime.textContent = formatUptime(data.uptime);
+  }
+  
+  // Update client count
+  const clientCount = document.getElementById('client-count');
+  if (clientCount) {
+    clientCount.textContent = data.clientCount || 0;
+  }
+  
+  // Update performance last updated timestamp
+  updateTimestamp('performance-last-updated');
+  pulseRealTimeIndicator(null, 'performance');
+}
+
+function updateDataStats(data) {
+  if (!data) return;
+  
+  // Update total data points
+  const totalDataPoints = document.getElementById('total-data-points');
+  if (totalDataPoints) {
+    totalDataPoints.textContent = data.totalDataPoints || 0;
+  }
+  
+  // Update today's data points
+  const todayDataPoints = document.getElementById('today-data-points');
+  if (todayDataPoints) {
+    todayDataPoints.textContent = data.todayDataPoints || 0;
+  }
+  
+  // Update today's alerts
+  const todayAlerts = document.getElementById('today-alerts');
+  if (todayAlerts) {
+    todayAlerts.textContent = data.todayAlerts || 0;
+  }
+  
+  // Update database size
+  const dbSize = document.getElementById('db-size');
+  if (dbSize && data.dbSize !== undefined) {
+    dbSize.textContent = `${(data.dbSize / (1024 * 1024)).toFixed(2)} MB`;
+  }
+  
+  // Update data stats last updated timestamp
+  updateTimestamp('data-stats-last-updated');
+}
+
+// Utility function to format uptime in days, hours, minutes
+function formatUptime(uptimeInSeconds) {
+  if (typeof uptimeInSeconds !== 'number') return '-';
+  
+  const days = Math.floor(uptimeInSeconds / (24 * 60 * 60));
+  const hours = Math.floor((uptimeInSeconds % (24 * 60 * 60)) / (60 * 60));
+  const minutes = Math.floor((uptimeInSeconds % (60 * 60)) / 60);
+  
+  let result = '';
+  if (days > 0) {
+    result += `${days}日 `;
+  }
+  if (hours > 0 || days > 0) {
+    result += `${hours}時間 `;
+  }
+  result += `${minutes}分`;
+  
+  return result;
+}
+
+// Server-specific indicator functions
+function pulseServerRealTimeIndicator() {
+  const indicator = document.getElementById('server-realtime-indicator');
+  if (!indicator) return;
+  
+  const dot = indicator.querySelector('.realtime-dot');
+  if (dot) {
+    dot.classList.add('active-pulse');
+    setTimeout(() => {
+      dot.classList.remove('active-pulse');
+    }, 2000);
+  }
+}
+
+function refreshServerStats() {
+  const button = event.currentTarget;
+  
+  // Add spinning animation to the refresh button
+  button.classList.add('spinning');
+  
+  // Emit a request for updated server stats
+  const socket = io();
+  socket.emit('requestServerStats');
+  
+  // Remove spinning class after 1 second
+  setTimeout(() => {
+    button.classList.remove('spinning');
+  }, 1000);
+  
+  // Update timestamp
+  updateTimestamp('status-last-updated');
 }

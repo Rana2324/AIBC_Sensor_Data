@@ -112,9 +112,9 @@
                 <button class="refresh-btn" onclick="refreshAlertData('<%= sensorId %>')">
                   <span class="refresh-icon">🔄</span>
                 </button>
-                <button class="expand-btn" onclick="toggleTableExpand('alerts-<%= sensorId %>-wrapper')">
+                <!-- <button class="expand-btn" onclick="toggleTableExpand('alerts-<%= sensorId %>-wrapper')">
                   <span class="toggle-icon">⌄</span><span class="toggle-text">展開</span>
-                </button>
+                </button> -->
               </div>
             </div>
             <div class="table-wrapper alert-table" id="alerts-<%= sensorId %>-wrapper">
@@ -146,7 +146,7 @@
             
             <!-- Settings History -->
             <div class="section-header history-section-header">
-              <h3>設定変更履歴 <span class="data-count">(最新10件)</span></h3>
+              <h3>設定変更履歴</h3>
               <div class="controls-right">
                 <span class="last-updated" id="settings-last-updated-<%= sensorId %>">最終更新: <%= new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit', second: '2-digit'}) %></span>
                 <span id="settings-realtime-indicator-<%= sensorId %>" class="realtime-indicator">
@@ -156,9 +156,9 @@
                 <button class="refresh-btn" onclick="refreshSettingsData('<%= sensorId %>')">
                   <span class="refresh-icon">🔄</span>
                 </button>
-                <button class="expand-btn" onclick="toggleTableExpand('settings-<%= sensorId %>-wrapper')">
+                <!-- <button class="expand-btn" onclick="toggleTableExpand('settings-<%= sensorId %>-wrapper')">
                   <span class="toggle-icon">⌄</span><span class="toggle-text">展開</span>
-                </button>
+                </button> -->
               </div>
             </div>
             <div class="table-wrapper settings-table" id="settings-<%= sensorId %>-wrapper">
@@ -190,7 +190,7 @@
             
             <!-- Personality History -->
             <div class="section-header history-section-header">
-              <h3>個性（バイアス）履歴 <span class="data-count">(最新10件)</span></h3>
+              <h3>個性（バイアス）履歴</h3>
               <div class="controls-right">
                 <span class="last-updated" id="personality-last-updated-<%= sensorId %>">最終更新: <%= new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit', second: '2-digit'}) %></span>
                 <span id="personality-realtime-indicator-<%= sensorId %>" class="realtime-indicator">
@@ -200,9 +200,9 @@
                 <button class="refresh-btn" onclick="refreshPersonalityData('<%= sensorId %>')">
                   <span class="refresh-icon">🔄</span>
                 </button>
-                <button class="expand-btn" onclick="toggleTableExpand('personality-<%= sensorId %>-wrapper')">
+                <!-- <button class="expand-btn" onclick="toggleTableExpand('personality-<%= sensorId %>-wrapper')">
                   <span class="toggle-icon">⌄</span><span class="toggle-text">展開</span>
-                </button>
+                </button> -->
               </div>
             </div>
             <div class="table-wrapper personality-table" id="personality-<%= sensorId %>-wrapper">
@@ -267,21 +267,32 @@
               <span class="stat-icon">⚡</span>
               システム状態
             </h3>
-            <span class="last-updated" id="status-last-updated">最終更新: <%= serverStats.lastUpdateTime ? new Date(serverStats.lastUpdateTime).toLocaleString('ja-JP') : '-' %></span>
+            <div class="controls-right">
+              <span class="last-updated" id="status-last-updated">最終更新: <%= serverStats.lastUpdateTime ? new Date(serverStats.lastUpdateTime).toLocaleString('ja-JP') : '-' %></span>
+              <span id="server-realtime-indicator" class="realtime-indicator">
+                <span class="realtime-dot"></span>
+                <span class="realtime-text">リアルタイム</span>
+              </span>
+              <button class="refresh-btn" onclick="refreshServerStats()">
+                <span class="refresh-icon">🔄</span>
+              </button>
+            </div>
           </div>
           <div class="stat-content" id="system-status">
             <table class="data-table status-table">
               <tr>
                 <th>MongoDB接続状態</th>
-                <td id="mongodb-status">接続中</td>
+                <td id="mongodb-status" class="<%= serverStats.mongoDbConnected ? 'status-connected' : 'status-disconnected' %>">
+                  <%= serverStats.mongoDbConnected ? '接続中' : '切断' %>
+                </td>
               </tr>
               <tr>
                 <th>センサー数</th>
-                <td id="sensor-count"><%= serverStats.totalSensors %></td>
+                <td id="sensor-count"><%= serverStats.totalSensors || 0 %></td>
               </tr>
               <tr>
                 <th>アクティブセンサー</th>
-                <td id="active-sensors"><%= serverStats.activeSensors %></td>
+                <td id="active-sensors"><%= serverStats.activeSensors || 0 %></td>
               </tr>
               <tr>
                 <th>最終データ受信</th>
@@ -293,6 +304,76 @@
                   minute: '2-digit',
                   second: '2-digit'
                 }) : '-' %></td>
+              </tr>
+            </table>
+          </div>
+        </div>
+        
+        <!-- Performance Stats Card -->
+        <div class="stat-card performance-stats">
+          <div class="stat-header">
+            <h3 class="stat-title">
+              <span class="stat-icon">📊</span>
+              パフォーマンス指標
+            </h3>
+            <div class="controls-right">
+              <span class="last-updated" id="performance-last-updated">最終更新: <%= new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit', second: '2-digit'}) %></span>
+              <span id="performance-realtime-indicator" class="realtime-indicator">
+                <span class="realtime-dot"></span>
+                <span class="realtime-text">リアルタイム</span>
+              </span>
+            </div>
+          </div>
+          <div class="stat-content" id="performance-stats-content">
+            <table class="data-table status-table">
+              <tr>
+                <th>CPU使用率</th>
+                <td id="cpu-usage"><%= serverStats.cpuUsage ? `${serverStats.cpuUsage.toFixed(1)}%` : '-' %></td>
+              </tr>
+              <tr>
+                <th>メモリ使用量</th>
+                <td id="memory-usage"><%= serverStats.memoryUsage ? `${(serverStats.memoryUsage / (1024 * 1024)).toFixed(2)} MB` : '-' %></td>
+              </tr>
+              <tr>
+                <th>稼働時間</th>
+                <td id="uptime"><%= serverStats.uptime ? formatUptime(serverStats.uptime) : '-' %></td>
+              </tr>
+              <tr>
+                <th>接続クライアント数</th>
+                <td id="client-count"><%= serverStats.clientCount || 0 %></td>
+              </tr>
+            </table>
+          </div>
+        </div>
+        
+        <!-- Data Statistics Card -->
+        <div class="stat-card data-stats">
+          <div class="stat-header">
+            <h3 class="stat-title">
+              <span class="stat-icon">📈</span>
+              データ統計
+            </h3>
+            <div class="controls-right">
+              <span class="last-updated" id="data-stats-last-updated">最終更新: <%= new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit', second: '2-digit'}) %></span>
+            </div>
+          </div>
+          <div class="stat-content" id="data-stats-content">
+            <table class="data-table status-table">
+              <tr>
+                <th>総データポイント数</th>
+                <td id="total-data-points"><%= serverStats.totalDataPoints || 0 %></td>
+              </tr>
+              <tr>
+                <th>本日のデータ数</th>
+                <td id="today-data-points"><%= serverStats.todayDataPoints || 0 %></td>
+              </tr>
+              <tr>
+                <th>本日のアラート数</th>
+                <td id="today-alerts"><%= serverStats.todayAlerts || 0 %></td>
+              </tr>
+              <tr>
+                <th>データベースサイズ</th>
+                <td id="db-size"><%= serverStats.dbSize ? `${(serverStats.dbSize / (1024 * 1024)).toFixed(2)} MB` : '-' %></td>
               </tr>
             </table>
           </div>

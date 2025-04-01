@@ -679,6 +679,7 @@ body {
   padding: 20px;
   box-shadow: var(--shadow-md);
   transition: var(--transition);
+  border: 1px solid var(--gray-200);
 }
 
 .stat-card:hover {
@@ -686,49 +687,242 @@ body {
   box-shadow: var(--shadow-lg);
 }
 
+/* Stylish header for stat cards */
+.stat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--gray-200);
+}
+
 .stat-title {
   font-size: 18px;
   font-weight: 600;
-  color: var(--primary);
-  margin-bottom: 16px;
-  padding-bottom: 8px;
-  border-bottom: 2px solid var(--primary-light);
+  color: var(--dark);
+  margin: 0;
+  display: flex;
+  align-items: center;
 }
 
-/* Section controls with refresh button */
+.stat-icon {
+  margin-right: 10px;
+  font-size: 1.3rem;
+}
+
+/* Specific theming for each stat card */
+.system-status .stat-title {
+  color: var(--primary);
+}
+
+.system-status .stat-header {
+  border-bottom-color: var(--primary-light);
+}
+
+.performance-stats .stat-title {
+  color: #4CAF50;
+}
+
+.performance-stats .stat-header {
+  border-bottom-color: rgba(76, 175, 80, 0.5);
+}
+
+.data-stats .stat-title {
+  color: #FF9800;
+}
+
+.data-stats .stat-header {
+  border-bottom-color: rgba(255, 152, 0, 0.5);
+}
+
+/* Improved status table */
+.status-table {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.status-table th {
+  width: 40%;
+  text-align: left;
+  background-color: var(--gray-100);
+  color: var(--dark);
+}
+
+.status-table td {
+  width: 60%;
+  text-align: right;
+  font-weight: 500;
+}
+
+/* Connection status indicators */
+.status-connected {
+  color: #4CAF50;
+}
+
+.status-disconnected {
+  color: #F44336;
+}
+
+/* Animation for timestamp updates */
+.timestamp-updated {
+  animation: flash-update 1s ease-in-out;
+}
+
+@keyframes flash-update {
+  0% {
+    background-color: transparent;
+  }
+  50% {
+    background-color: rgba(76, 175, 80, 0.2);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* Real-time indicator styling */
+.realtime-indicator {
+  display: flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 4px 8px;
+  border-radius: 16px;
+  background-color: rgba(76, 201, 240, 0.1);
+  border: 1px solid rgba(76, 201, 240, 0.3);
+  font-size: 12px;
+  color: #4895ef;
+}
+
+.realtime-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #4895ef;
+  margin-right: 6px;
+}
+
+.realtime-dot.active-pulse {
+  animation: strongPulse 1.5s ease;
+}
+
 .section-controls {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .controls-right {
   display: flex;
   align-items: center;
+  gap: 8px;
 }
 
+.last-updated {
+  font-size: 12px;
+  color: var(--gray-600);
+}
+
+/* Refresh button styling */
 .refresh-btn {
-  background: none;
+  background-color: transparent;
   border: none;
-  cursor: pointer;
-  color: #555;
-  font-size: 1.1rem;
-  padding: 5px;
   border-radius: 50%;
+  width: 30px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s ease;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
 }
 
 .refresh-btn:hover {
-  background-color: rgba(0, 0, 0, 0.05);
-  transform: scale(1.1);
+  background-color: rgba(72, 149, 239, 0.1);
+  transform: translateY(-1px);
+}
+
+.refresh-btn:active {
+  transform: translateY(1px);
+}
+
+.refresh-icon {
+  font-size: 16px;
+  color: var(--gray-600);
 }
 
 .refresh-btn.spinning .refresh-icon {
   animation: spin 1s linear infinite;
+}
+
+/* Enhanced placeholder styling */
+.placeholder-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--gray-200);
+  padding-bottom: 15px;
+  margin-bottom: 20px;
+}
+
+.placeholder-status {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  background-color: rgba(189, 189, 189, 0.2);
+  color: #9E9E9E;
+  border: 1px solid rgba(189, 189, 189, 0.3);
+  display: flex;
+  align-items: center;
+}
+
+.placeholder-status::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #BDBDBD;
+  margin-right: 8px;
+}
+
+.placeholder-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  border: 1px dashed var(--gray-300);
+}
+
+.placeholder-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  color: #BDBDBD;
+}
+
+.placeholder-content p {
+  margin: 0 0 8px;
+  font-size: 16px;
+  color: #757575;
+}
+
+.placeholder-content small {
+  color: #9E9E9E;
+  font-size: 13px;
+}
+
+/* Animation keyframes */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes pulse {
@@ -751,176 +945,22 @@ body {
   to { transform: rotate(360deg); }
 }
 
-/* Table row enter animation */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-tbody tr:first-child {
-  animation: fadeIn 0.3s ease-out;
-}
-
-/* Highlight new data briefly */
-.new-data {
-  background-color: rgba(76, 175, 80, 0.1);
-  transition: background-color 2s;
-}
-
-/* Alert flash animation */
-@keyframes alertFlash {
-  0% { background-color: rgba(255, 0, 0, 0.2); }
-  100% { background-color: transparent; }
-}
-
-.alert-flash {
-  animation: alertFlash 2s;
-}
-
-/* Real-time indicator styles */
-.realtime-indicator {
-  display: flex;
-  align-items: center;
-  font-size: 0.8rem;
-  color: #4CAF50;
-  margin-right: 10px;
-}
-
-.realtime-dot {
-  width: 8px;
-  height: 8px;
-  background-color: #4CAF50;
-  border-radius: 50%;
-  margin-right: 5px;
-  animation: pulse 2s infinite;
-}
-
-/* Active pulse effect when new data is received */
-.realtime-dot.active-pulse {
-  animation: strongPulse 1s ease-out;
-  background-color: #FF5722;
-}
-
 @keyframes strongPulse {
   0% {
     transform: scale(1);
     opacity: 1;
-    box-shadow: 0 0 0 0 rgba(255, 87, 34, 0.7);
+    box-shadow: 0 0 0 0 rgba(72, 149, 239, 0.7);
   }
   50% {
     transform: scale(1.5);
     opacity: 0.7;
-    box-shadow: 0 0 0 10px rgba(255, 87, 34, 0);
+    box-shadow: 0 0 0 10px rgba(72, 149, 239, 0);
   }
   100% {
     transform: scale(1);
     opacity: 1;
-    box-shadow: 0 0 0 0 rgba(255, 87, 34, 0);
-    background-color: #4CAF50;
+    box-shadow: 0 0 0 0 rgba(72, 149, 239, 0);
   }
-}
-
-/* Last updated timestamp style */
-.last-updated {
-  font-size: 0.75rem;
-  color: #757575;
-  margin-right: 10px;
-}
-
-/* Empty sensor placeholder styling - enhanced to match real sensor cards */
-.sensor-placeholder {
-  background-color: white;
-  border: 1px solid var(--gray-300);
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-items: stretch;
-  min-height: 300px;
-}
-
-.sensor-placeholder .placeholder-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-bottom: 15px;
-  margin-bottom: 20px;
-  border-bottom: 1px solid var(--gray-200);
-}
-
-.sensor-placeholder h3 {
-  margin: 0;
-  font-size: 1.5rem;
-  color: var(--dark);
-  display: flex;
-  align-items: center;
-}
-
-.sensor-placeholder .placeholder-icon {
-  margin-right: 10px;
-  font-size: 1.8rem;
-  color: var(--gray-500);
-}
-
-.sensor-placeholder .placeholder-status {
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  background-color: rgba(158, 158, 158, 0.2);
-  color: #9E9E9E;
-  border: 1px solid rgba(158, 158, 158, 0.3);
-}
-
-.sensor-placeholder .placeholder-status::before {
-  content: "";
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  margin-right: 8px;
-  background-color: #9E9E9E;
-}
-
-.sensor-placeholder .placeholder-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  flex-grow: 1;
-  padding: 30px 20px;
-  color: var(--gray-500);
-  text-align: center;
-}
-
-.sensor-placeholder p {
-  margin: 10px 0;
-  color: var(--gray-600);
-}
-
-/* Temperature threshold colors */
-:root {
-  --temp-danger: #ffebee;  /* Light red background for temperature warning */
-}
-
-/* Temperature threshold highlighting for data tables */
-.data-table td.temp-danger {
-  background-color: var(--temp-danger);
-  color: red;
-  font-weight: 500;
-}
-
-/* Add subtle pulsing to temperature danger cells on first load */
-@keyframes tempWarningPulse {
-  0% { background-color: var(--temp-danger); }
-  50% { background-color: #ffe6e6; }
-  100% { background-color: var(--temp-danger); }
-}
-
-.data-table td.temp-danger.new-temp-warning {
-  animation: tempWarningPulse 2s ease-in-out;
 }
 
 
