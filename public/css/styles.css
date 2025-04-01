@@ -738,6 +738,38 @@ body {
   border-bottom-color: rgba(255, 152, 0, 0.5);
 }
 
+/* New card-specific theming for the additional server sections */
+.personality-comparison .stat-title {
+  color: #9C27B0;
+}
+
+.personality-comparison .stat-header {
+  border-bottom-color: rgba(156, 39, 176, 0.5);
+}
+
+.model-update .stat-title {
+  color: #3F51B5;
+}
+
+.model-update .stat-header {
+  border-bottom-color: rgba(63, 81, 181, 0.5);
+}
+
+.blockchain-ipfs .stat-title {
+  color: #009688;
+}
+
+.blockchain-ipfs .stat-header {
+  border-bottom-color: rgba(0, 150, 136, 0.5);
+}
+
+/* Description text for server sections */
+.description-text {
+  margin-bottom: 12px;
+  color: var(--gray-600);
+  font-style: italic;
+}
+
 /* Improved status table */
 .status-table {
   width: 100%;
@@ -757,6 +789,43 @@ body {
   font-weight: 500;
 }
 
+/* Adjust width for server info tables with more columns */
+.server-stats .status-table th,
+.server-stats .status-table td {
+  width: auto;
+  text-align: center;
+}
+
+.server-stats .status-table th {
+  background-color: #34495e;
+  color: white;
+}
+
+/* Blockchain/IPFS special styling */
+.ipfs-cid a, 
+.blockchain-tx a {
+  color: #3F51B5;
+  text-decoration: none;
+  font-family: monospace;
+  transition: color 0.2s ease;
+}
+
+.ipfs-cid a:hover, 
+.blockchain-tx a:hover {
+  color: #1A237E;
+  text-decoration: underline;
+}
+
+.status-completed {
+  color: #4CAF50;
+  font-weight: 600;
+}
+
+.status-pending {
+  color: #FF9800;
+  font-weight: 600;
+}
+
 /* Connection status indicators */
 .status-connected {
   color: #4CAF50;
@@ -764,205 +833,6 @@ body {
 
 .status-disconnected {
   color: #F44336;
-}
-
-/* Animation for timestamp updates */
-.timestamp-updated {
-  animation: flash-update 1s ease-in-out;
-}
-
-@keyframes flash-update {
-  0% {
-    background-color: transparent;
-  }
-  50% {
-    background-color: rgba(76, 175, 80, 0.2);
-  }
-  100% {
-    background-color: transparent;
-  }
-}
-
-/* Real-time indicator styling */
-.realtime-indicator {
-  display: flex;
-  align-items: center;
-  margin-left: 8px;
-  padding: 4px 8px;
-  border-radius: 16px;
-  background-color: rgba(76, 201, 240, 0.1);
-  border: 1px solid rgba(76, 201, 240, 0.3);
-  font-size: 12px;
-  color: #4895ef;
-}
-
-.realtime-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: #4895ef;
-  margin-right: 6px;
-}
-
-.realtime-dot.active-pulse {
-  animation: strongPulse 1.5s ease;
-}
-
-.section-controls {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.controls-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.last-updated {
-  font-size: 12px;
-  color: var(--gray-600);
-}
-
-/* Refresh button styling */
-.refresh-btn {
-  background-color: transparent;
-  border: none;
-  border-radius: 50%;
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  padding: 0;
-}
-
-.refresh-btn:hover {
-  background-color: rgba(72, 149, 239, 0.1);
-  transform: translateY(-1px);
-}
-
-.refresh-btn:active {
-  transform: translateY(1px);
-}
-
-.refresh-icon {
-  font-size: 16px;
-  color: var(--gray-600);
-}
-
-.refresh-btn.spinning .refresh-icon {
-  animation: spin 1s linear infinite;
-}
-
-/* Enhanced placeholder styling */
-.placeholder-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid var(--gray-200);
-  padding-bottom: 15px;
-  margin-bottom: 20px;
-}
-
-.placeholder-status {
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  background-color: rgba(189, 189, 189, 0.2);
-  color: #9E9E9E;
-  border: 1px solid rgba(189, 189, 189, 0.3);
-  display: flex;
-  align-items: center;
-}
-
-.placeholder-status::before {
-  content: "";
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background-color: #BDBDBD;
-  margin-right: 8px;
-}
-
-.placeholder-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 20px;
-  text-align: center;
-  background-color: #f9f9f9;
-  border-radius: 8px;
-  border: 1px dashed var(--gray-300);
-}
-
-.placeholder-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-  color: #BDBDBD;
-}
-
-.placeholder-content p {
-  margin: 0 0 8px;
-  font-size: 16px;
-  color: #757575;
-}
-
-.placeholder-content small {
-  color: #9E9E9E;
-  font-size: 13px;
-}
-
-/* Animation keyframes */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes pulse {
-  0% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.6;
-    transform: scale(1.2);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-@keyframes strongPulse {
-  0% {
-    transform: scale(1);
-    opacity: 1;
-    box-shadow: 0 0 0 0 rgba(72, 149, 239, 0.7);
-  }
-  50% {
-    transform: scale(1.5);
-    opacity: 0.7;
-    box-shadow: 0 0 0 10px rgba(72, 149, 239, 0);
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-    box-shadow: 0 0 0 0 rgba(72, 149, 239, 0);
-  }
 }
 
 

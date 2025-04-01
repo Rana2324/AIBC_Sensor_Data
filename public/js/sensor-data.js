@@ -802,116 +802,236 @@ function updateServerStats(data) {
     });
   }
   
+  // Update personality comparison data if available
+  if (data.personalityComparison) {
+    updatePersonalityComparisonTable(data.personalityComparison);
+  }
+  
+  // Update model updates data if available
+  if (data.modelUpdates) {
+    updateModelUpdatesTable(data.modelUpdates);
+  }
+  
+  // Update blockchain/IPFS records if available
+  if (data.blockchainRecords) {
+    updateBlockchainRecordsTable(data.blockchainRecords);
+  }
+  
   // Update status last updated timestamp
   updateTimestamp('status-last-updated');
 }
 
-function updatePerformanceStats(data) {
-  if (!data) return;
+// New functions for the server information sections
+function updatePersonalityComparisonTable(data) {
+  if (!Array.isArray(data)) return;
   
-  // Update CPU usage
-  const cpuUsage = document.getElementById('cpu-usage');
-  if (cpuUsage && data.cpuUsage !== undefined) {
-    cpuUsage.textContent = `${data.cpuUsage.toFixed(1)}%`;
+  const tbody = document.getElementById('personality-comparison-tbody');
+  if (!tbody) return;
+  
+  // Clear existing rows
+  tbody.innerHTML = '';
+  
+  if (data.length === 0) {
+    const tr = document.createElement('tr');
+    tr.className = 'empty-table-row';
+    
+    const td = document.createElement('td');
+    td.colSpan = 5;
+    td.textContent = '個性比較履歴はありません';
+    
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
   }
   
-  // Update memory usage
-  const memoryUsage = document.getElementById('memory-usage');
-  if (memoryUsage && data.memoryUsage !== undefined) {
-    memoryUsage.textContent = `${(data.memoryUsage / (1024 * 1024)).toFixed(2)} MB`;
-  }
+  // Display only the latest 10 records
+  data.slice(0, 10).forEach(item => {
+    const tr = document.createElement('tr');
+    
+    // Date cell
+    const dateCell = document.createElement('td');
+    dateCell.textContent = item.date || '-';
+    tr.appendChild(dateCell);
+    
+    // Time cell
+    const timeCell = document.createElement('td');
+    timeCell.textContent = item.time || '-';
+    tr.appendChild(timeCell);
+    
+    // Sensor ID cell
+    const sensorIdCell = document.createElement('td');
+    sensorIdCell.textContent = item.sensorId || '-';
+    tr.appendChild(sensorIdCell);
+    
+    // Difference value cell
+    const differenceCell = document.createElement('td');
+    differenceCell.textContent = item.difference !== undefined ? item.difference.toFixed(2) : '-';
+    tr.appendChild(differenceCell);
+    
+    // AI output cell
+    const aiOutputCell = document.createElement('td');
+    aiOutputCell.textContent = item.aiOutput || '-';
+    tr.appendChild(aiOutputCell);
+    
+    tbody.appendChild(tr);
+  });
   
-  // Update uptime
-  const uptime = document.getElementById('uptime');
-  if (uptime && data.uptime !== undefined) {
-    uptime.textContent = formatUptime(data.uptime);
-  }
-  
-  // Update client count
-  const clientCount = document.getElementById('client-count');
-  if (clientCount) {
-    clientCount.textContent = data.clientCount || 0;
-  }
-  
-  // Update performance last updated timestamp
-  updateTimestamp('performance-last-updated');
-  pulseRealTimeIndicator(null, 'performance');
+  // Update timestamp
+  updateTimestamp('personality-comparison-last-updated');
 }
 
-function updateDataStats(data) {
-  if (!data) return;
+function updateModelUpdatesTable(data) {
+  if (!Array.isArray(data)) return;
   
-  // Update total data points
-  const totalDataPoints = document.getElementById('total-data-points');
-  if (totalDataPoints) {
-    totalDataPoints.textContent = data.totalDataPoints || 0;
+  const tbody = document.getElementById('model-update-tbody');
+  if (!tbody) return;
+  
+  // Clear existing rows
+  tbody.innerHTML = '';
+  
+  if (data.length === 0) {
+    const tr = document.createElement('tr');
+    tr.className = 'empty-table-row';
+    
+    const td = document.createElement('td');
+    td.colSpan = 5;
+    td.textContent = 'モデル更新履歴はありません';
+    
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
   }
   
-  // Update today's data points
-  const todayDataPoints = document.getElementById('today-data-points');
-  if (todayDataPoints) {
-    todayDataPoints.textContent = data.todayDataPoints || 0;
-  }
+  // Display only the latest 10 records
+  data.slice(0, 10).forEach(item => {
+    const tr = document.createElement('tr');
+    
+    // Date cell
+    const dateCell = document.createElement('td');
+    dateCell.textContent = item.date || '-';
+    tr.appendChild(dateCell);
+    
+    // Time cell
+    const timeCell = document.createElement('td');
+    timeCell.textContent = item.time || '-';
+    tr.appendChild(timeCell);
+    
+    // Model ID cell
+    const modelIdCell = document.createElement('td');
+    modelIdCell.textContent = item.modelId || '-';
+    tr.appendChild(modelIdCell);
+    
+    // Update content cell
+    const contentCell = document.createElement('td');
+    contentCell.textContent = item.content || '-';
+    tr.appendChild(contentCell);
+    
+    // AI output cell
+    const aiOutputCell = document.createElement('td');
+    aiOutputCell.textContent = item.aiOutput || '-';
+    tr.appendChild(aiOutputCell);
+    
+    tbody.appendChild(tr);
+  });
   
-  // Update today's alerts
-  const todayAlerts = document.getElementById('today-alerts');
-  if (todayAlerts) {
-    todayAlerts.textContent = data.todayAlerts || 0;
-  }
-  
-  // Update database size
-  const dbSize = document.getElementById('db-size');
-  if (dbSize && data.dbSize !== undefined) {
-    dbSize.textContent = `${(data.dbSize / (1024 * 1024)).toFixed(2)} MB`;
-  }
-  
-  // Update data stats last updated timestamp
-  updateTimestamp('data-stats-last-updated');
+  // Update timestamp
+  updateTimestamp('model-update-last-updated');
 }
 
-// Utility function to format uptime in days, hours, minutes
-function formatUptime(uptimeInSeconds) {
-  if (typeof uptimeInSeconds !== 'number') return '-';
+function updateBlockchainRecordsTable(data) {
+  if (!Array.isArray(data)) return;
   
-  const days = Math.floor(uptimeInSeconds / (24 * 60 * 60));
-  const hours = Math.floor((uptimeInSeconds % (24 * 60 * 60)) / (60 * 60));
-  const minutes = Math.floor((uptimeInSeconds % (60 * 60)) / 60);
+  const tbody = document.getElementById('blockchain-ipfs-tbody');
+  if (!tbody) return;
   
-  let result = '';
-  if (days > 0) {
-    result += `${days}日 `;
+  // Clear existing rows
+  tbody.innerHTML = '';
+  
+  if (data.length === 0) {
+    const tr = document.createElement('tr');
+    tr.className = 'empty-table-row';
+    
+    const td = document.createElement('td');
+    td.colSpan = 6;
+    td.textContent = 'ブロックチェーン/IPFS格納履歴はありません';
+    
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
   }
-  if (hours > 0 || days > 0) {
-    result += `${hours}時間 `;
-  }
-  result += `${minutes}分`;
   
-  return result;
+  data.forEach(record => {
+    const tr = document.createElement('tr');
+    
+    // Date cell
+    const dateCell = document.createElement('td');
+    dateCell.textContent = record.date || '-';
+    tr.appendChild(dateCell);
+    
+    // Time cell
+    const timeCell = document.createElement('td');
+    timeCell.textContent = record.time || '-';
+    tr.appendChild(timeCell);
+    
+    // Model ID cell
+    const modelIdCell = document.createElement('td');
+    modelIdCell.textContent = record.modelId || '-';
+    tr.appendChild(modelIdCell);
+    
+    // IPFS CID cell with link
+    const ipfsCidCell = document.createElement('td');
+    ipfsCidCell.className = 'ipfs-cid';
+    
+    if (record.ipfsCid) {
+      const ipfsLink = document.createElement('a');
+      ipfsLink.href = `https://ipfs.io/ipfs/${record.ipfsCid}`;
+      ipfsLink.target = '_blank';
+      ipfsLink.textContent = `${record.ipfsCid.substring(0, 10)}...`;
+      ipfsCidCell.appendChild(ipfsLink);
+    } else {
+      ipfsCidCell.textContent = '-';
+    }
+    
+    tr.appendChild(ipfsCidCell);
+    
+    // Blockchain TX cell with link
+    const txCell = document.createElement('td');
+    txCell.className = 'blockchain-tx';
+    
+    if (record.txHash) {
+      const txLink = document.createElement('a');
+      txLink.href = `#`; // This would be updated to point to the actual blockchain explorer
+      txLink.target = '_blank';
+      txLink.textContent = `${record.txHash.substring(0, 10)}...`;
+      txCell.appendChild(txLink);
+    } else {
+      txCell.textContent = '-';
+    }
+    
+    tr.appendChild(txCell);
+    
+    // Status cell
+    const statusCell = document.createElement('td');
+    statusCell.className = record.status === '完了' ? 'status-completed' : 'status-pending';
+    statusCell.textContent = record.status || '-';
+    tr.appendChild(statusCell);
+    
+    tbody.appendChild(tr);
+  });
+  
+  // Update timestamp
+  updateTimestamp('blockchain-last-updated');
 }
 
-// Server-specific indicator functions
-function pulseServerRealTimeIndicator() {
-  const indicator = document.getElementById('server-realtime-indicator');
-  if (!indicator) return;
-  
-  const dot = indicator.querySelector('.realtime-dot');
-  if (dot) {
-    dot.classList.add('active-pulse');
-    setTimeout(() => {
-      dot.classList.remove('active-pulse');
-    }, 2000);
-  }
-}
-
-function refreshServerStats() {
+function refreshPersonalityComparison() {
   const button = event.currentTarget;
   
   // Add spinning animation to the refresh button
   button.classList.add('spinning');
   
-  // Emit a request for updated server stats
+  // Emit a request for updated personality comparison data
   const socket = io();
-  socket.emit('requestServerStats');
+  socket.emit('requestPersonalityComparison');
   
   // Remove spinning class after 1 second
   setTimeout(() => {
@@ -919,5 +1039,52 @@ function refreshServerStats() {
   }, 1000);
   
   // Update timestamp
-  updateTimestamp('status-last-updated');
+  updateTimestamp('personality-comparison-last-updated');
+  
+  // Pulse the real-time indicator
+  pulseRealTimeIndicator(null, 'personality-comparison');
+}
+
+function refreshModelUpdateHistory() {
+  const button = event.currentTarget;
+  
+  // Add spinning animation to the refresh button
+  button.classList.add('spinning');
+  
+  // Emit a request for updated model update history
+  const socket = io();
+  socket.emit('requestModelUpdates');
+  
+  // Remove spinning class after 1 second
+  setTimeout(() => {
+    button.classList.remove('spinning');
+  }, 1000);
+  
+  // Update timestamp
+  updateTimestamp('model-update-last-updated');
+  
+  // Pulse the real-time indicator
+  pulseRealTimeIndicator(null, 'model-update');
+}
+
+function refreshBlockchainHistory() {
+  const button = event.currentTarget;
+  
+  // Add spinning animation to the refresh button
+  button.classList.add('spinning');
+  
+  // Emit a request for updated blockchain/IPFS records
+  const socket = io();
+  socket.emit('requestBlockchainRecords');
+  
+  // Remove spinning class after 1 second
+  setTimeout(() => {
+    button.classList.remove('spinning');
+  }, 1000);
+  
+  // Update timestamp
+  updateTimestamp('blockchain-last-updated');
+  
+  // Pulse the real-time indicator
+  pulseRealTimeIndicator(null, 'blockchain');
 }

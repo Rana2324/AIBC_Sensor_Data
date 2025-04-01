@@ -378,6 +378,170 @@
             </table>
           </div>
         </div>
+        
+        <!-- Personality Comparison History Card -->
+        <div class="stat-card personality-comparison">
+          <div class="stat-header">
+            <h3 class="stat-title">
+              <span class="stat-icon">🧠</span>
+              個性比較履歴
+            </h3>
+            <div class="controls-right">
+              <span class="last-updated" id="personality-comparison-last-updated">最終更新: <%= new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit', second: '2-digit'}) %></span>
+              <span id="personality-comparison-realtime-indicator" class="realtime-indicator">
+                <span class="realtime-dot"></span>
+                <span class="realtime-text">リアルタイム</span>
+              </span>
+              <button class="refresh-btn" onclick="refreshPersonalityComparison()">
+                <span class="refresh-icon">🔄</span>
+              </button>
+            </div>
+          </div>
+          <div class="stat-content" id="personality-comparison-content">
+            <div class="description-text">
+              <small>個性: １０秒間(４０点データ)で判断される標準モデルとの差異</small>
+            </div>
+            <div class="table-wrapper">
+              <table class="data-table status-table">
+                <thead>
+                  <tr>
+                    <th>日付</th>
+                    <th>時刻</th>
+                    <th>センサーID</th>
+                    <th>差異値</th>
+                    <th>AIの出力</th>
+                  </tr>
+                </thead>
+                <tbody id="personality-comparison-tbody">
+                  <% if (serverStats.personalityComparison && serverStats.personalityComparison.length > 0) { %>
+                    <% serverStats.personalityComparison.slice(0, 10).forEach(item => { %>
+                    <tr>
+                      <td><%= item.date || '-' %></td>
+                      <td><%= item.time || '-' %></td>
+                      <td><%= item.sensorId || '-' %></td>
+                      <td><%= item.difference !== undefined ? item.difference.toFixed(2) : '-' %></td>
+                      <td><%= item.aiOutput || '-' %></td>
+                    </tr>
+                    <% }); %>
+                  <% } else { %>
+                    <tr class="empty-table-row">
+                      <td colspan="5">個性比較履歴はありません</td>
+                    </tr>
+                  <% } %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Standard Model Update History Card -->
+        <div class="stat-card model-update">
+          <div class="stat-header">
+            <h3 class="stat-title">
+              <span class="stat-icon">📝</span>
+              標準モデル更新履歴
+            </h3>
+            <div class="controls-right">
+              <span class="last-updated" id="model-update-last-updated">最終更新: <%= new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit', second: '2-digit'}) %></span>
+              <span id="model-update-realtime-indicator" class="realtime-indicator">
+                <span class="realtime-dot"></span>
+                <span class="realtime-text">リアルタイム</span>
+              </span>
+              <button class="refresh-btn" onclick="refreshModelUpdateHistory()">
+                <span class="refresh-icon">🔄</span>
+              </button>
+            </div>
+          </div>
+          <div class="stat-content" id="model-update-content">
+            <div class="description-text">
+              <small>更新: 標準モデルをデータで教育してアップデート</small>
+            </div>
+            <div class="table-wrapper">
+              <table class="data-table status-table">
+                <thead>
+                  <tr>
+                    <th>日付</th>
+                    <th>時刻</th>
+                    <th>モデルID</th>
+                    <th>更新内容</th>
+                    <th>AIの出力</th>
+                  </tr>
+                </thead>
+                <tbody id="model-update-tbody">
+                  <% if (serverStats.modelUpdates && serverStats.modelUpdates.length > 0) { %>
+                    <% serverStats.modelUpdates.slice(0, 10).forEach(update => { %>
+                    <tr>
+                      <td><%= update.date || '-' %></td>
+                      <td><%= update.time || '-' %></td>
+                      <td><%= update.modelId || '-' %></td>
+                      <td><%= update.content || '-' %></td>
+                      <td><%= update.aiOutput || '-' %></td>
+                    </tr>
+                    <% }); %>
+                  <% } else { %>
+                    <tr class="empty-table-row">
+                      <td colspan="5">モデル更新履歴はありません</td>
+                    </tr>
+                  <% } %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Blockchain/IPFS Storage History Card -->
+        <div class="stat-card blockchain-ipfs">
+          <div class="stat-header">
+            <h3 class="stat-title">
+              <span class="stat-icon">🔗</span>
+              ブロックチェーン/IPFS格納履歴
+            </h3>
+            <div class="controls-right">
+              <span class="last-updated" id="blockchain-last-updated">最終更新: <%= new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit', second: '2-digit'}) %></span>
+              <span id="blockchain-realtime-indicator" class="realtime-indicator">
+                <span class="realtime-dot"></span>
+                <span class="realtime-text">リアルタイム</span>
+              </span>
+              <button class="refresh-btn" onclick="refreshBlockchainHistory()">
+                <span class="refresh-icon">🔄</span>
+              </button>
+            </div>
+          </div>
+          <div class="stat-content" id="blockchain-content">
+            <div class="table-wrapper">
+              <table class="data-table status-table">
+                <thead>
+                  <tr>
+                    <th>日付</th>
+                    <th>時刻</th>
+                    <th>モデルID</th>
+                    <th>IPFS CID</th>
+                    <th>ブロックチェーンTX</th>
+                    <th>ステータス</th>
+                  </tr>
+                </thead>
+                <tbody id="blockchain-ipfs-tbody">
+                  <% if (serverStats.blockchainRecords && serverStats.blockchainRecords.length > 0) { %>
+                    <% serverStats.blockchainRecords.forEach(record => { %>
+                    <tr>
+                      <td><%= record.date || '-' %></td>
+                      <td><%= record.time || '-' %></td>
+                      <td><%= record.modelId || '-' %></td>
+                      <td class="ipfs-cid"><a href="https://ipfs.io/ipfs/<%= record.ipfsCid %>" target="_blank"><%= record.ipfsCid ? record.ipfsCid.substring(0, 10) + '...' : '-' %></a></td>
+                      <td class="blockchain-tx"><a href="#" target="_blank"><%= record.txHash ? record.txHash.substring(0, 10) + '...' : '-' %></a></td>
+                      <td class="<%= record.status === '完了' ? 'status-completed' : 'status-pending' %>"><%= record.status || '-' %></td>
+                    </tr>
+                    <% }); %>
+                  <% } else { %>
+                    <tr class="empty-table-row">
+                      <td colspan="6">ブロックチェーン/IPFS格納履歴はありません</td>
+                    </tr>
+                  <% } %>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
