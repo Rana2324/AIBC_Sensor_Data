@@ -21,10 +21,12 @@
     <!-- Sensor Tab Content -->
     <div id="sensorTab" class="tab-content">
       <% if (latestReadings && latestReadings.length > 0) { %>
-        <div class="sensor-panels <%= latestReadings.length === 1 ? 'single-sensor' : '' %>">
+        <div class="sensor-panels <%= latestReadings.length === 1 ? 'single-sensor' : 
+                                      latestReadings.length === 2 ? 'two-sensors' : 
+                                      'three-plus-sensors' %>">
           <% latestReadings.forEach((sensor, index) => { %>
             <% if (sensor.sensorId && sensor.sensorId.trim() !== '') { %>
-              <div class="sensor-data-section <%= latestReadings.length === 1 ? 'full-width' : '' %>" id="sensor-<%= sensor.sensorId %>">
+              <div class="sensor-data-section" id="sensor-<%= sensor.sensorId %>">
                 <div class="sensor-header">
                   <h2 class="sensor-title">
                     <span class="sensor-icon">🌡️</span>
@@ -259,9 +261,23 @@
       defaultTabBtn.classList.add('active');
     }
     
+    // Initialize scrollbar overflow indicators
+    initScrollIndicators();
+    
     // Setup Socket.IO functionality
     setupSocketIO();
   });
+  
+  // Check for table overflow to add visual indicators
+  function initScrollIndicators() {
+    // Check all table wrappers for overflow
+    document.querySelectorAll('.table-wrapper').forEach(wrapper => {
+      // Check if content is overflowing
+      if (wrapper.scrollHeight > wrapper.clientHeight) {
+        wrapper.classList.add('has-overflow');
+      }
+    });
+  }
 
   // Setup Socket.IO functionality
   function setupSocketIO() {

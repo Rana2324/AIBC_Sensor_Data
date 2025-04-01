@@ -61,6 +61,67 @@ body {
   font-weight: bold;
 }
 
+/* Sensor Panels Grid Layout - Updated for exact 3-column layout */
+.sensor-panels {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr); /* Exactly 3 equal columns */
+  gap: 20px;
+  width: 100%;
+}
+
+/* Make each sensor section a self-contained unit with its own scrolling */
+.sensor-panels > .sensor-data-section {
+  height: auto;
+  max-height: calc(100vh - 150px);
+  overflow-y: auto;
+  border: 1px solid var(--gray-300);
+  border-radius: 12px;
+  width: 100%; /* Ensure full width within its grid cell */
+}
+
+/* Ensure single sensor can take full width if needed */
+.sensor-panels.single-sensor {
+  grid-template-columns: 1fr;
+}
+
+/* For two sensors, use 50% each */
+.sensor-panels.two-sensors {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* For three or more sensors, use three equal columns */
+.sensor-panels.three-plus-sensors {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* Adjust the inner data section to not conflict with parent */
+.sensor-panels > .sensor-data-section .sensor-data-section {
+  box-shadow: none;
+  margin-bottom: 16px;
+  padding: 0;
+  border-radius: 0;
+  border: none;
+}
+
+/* Add custom scrollbar for sensor panels */
+.sensor-panels > .sensor-data-section::-webkit-scrollbar {
+  width: 8px;
+}
+
+.sensor-panels > .sensor-data-section::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.sensor-panels > .sensor-data-section::-webkit-scrollbar-thumb {
+  background: #bdbdbd;
+  border-radius: 4px;
+}
+
+.sensor-panels > .sensor-data-section::-webkit-scrollbar-thumb:hover {
+  background: #9e9e9e;
+}
+
 /* Connection Status */
 .connection-status {
   position: fixed;
@@ -346,6 +407,7 @@ body {
 .table-wrapper {
   max-height: 400px;
   overflow-y: auto;
+  overflow-x: auto; /* Ensure horizontal scrolling for wide tables */
   margin-bottom: 24px;
   border-radius: 8px;
   border: 1px solid var(--gray-200);
@@ -367,6 +429,42 @@ body {
   transition: max-height 0.3s ease, box-shadow 0.3s ease;
   margin-bottom: 20px;
   overflow-x: auto;
+}
+
+/* In side-by-side layout, make data tables more compact */
+.sensor-panels > .sensor-data-section .data-table th,
+.sensor-panels > .sensor-data-section .data-table td {
+  padding: 8px 10px;
+  font-size: 0.9rem;
+}
+
+/* Ensure horizontal scrolling for sensor data tables */
+.sensor-panels > .sensor-data-section .table-wrapper {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+/* Add a fading indicator to show there's more content to scroll */
+.table-wrapper:after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  height: 40px;
+  width: 100%;
+  background: linear-gradient(to top, rgba(255,255,255,0.7), rgba(255,255,255,0));
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.table-wrapper.has-overflow:after {
+  opacity: 1;
+}
+
+/* Ensure the pulse animation doesn't push layout in side-by-side mode */
+.sensor-panels > .sensor-data-section .realtime-dot.active-pulse {
+  position: relative;
 }
 
 /* Table-specific color coding */
