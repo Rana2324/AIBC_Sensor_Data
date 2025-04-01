@@ -1,5 +1,5 @@
-const morgan = require('morgan');
-const logger = require('../config/logger');
+import morgan from 'morgan';
+import logger from '../config/logger.js';
 
 // Create a write stream for Morgan
 const stream = {
@@ -44,7 +44,7 @@ const notFoundHandler = (req, res, next) => {
   next(err);
 };
 
-module.exports = {
+export {
   httpLogger,
   errorLogger,
   errorHandler,

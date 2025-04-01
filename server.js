@@ -1,27 +1,33 @@
-const express = require('express');
-const path = require('path');
-const http = require('http');
-const socketIo = require('socket.io');
-const expressLayouts = require('express-ejs-layouts');
-require('dotenv').config();
-
-// Import routes and services
-const viewRoutes = require('./routes/viewRoutes');
-const apiRoutes = require('./routes/apiRoutes');
-const socketService = require('./services/socketService');
-const { connectDB } = require('./config/db');
-const logger = require('./config/logger');
-const { 
+import express from 'express';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import http from 'http';
+import { Server } from 'socket.io';
+import expressLayouts from 'express-ejs-layouts';
+import dotenv from 'dotenv';
+import viewRoutes from './routes/viewRoutes.js';
+import apiRoutes from './routes/apiRoutes.js';
+import * as socketService from './services/socketService.js';
+import { connectDB } from './config/db.js';
+import logger from './config/logger.js';
+import { 
   httpLogger, 
   errorLogger, 
   errorHandler, 
   notFoundHandler 
-} = require('./middleware/logging');
+} from './middleware/logging.js';
+
+// Initialize environment variables
+dotenv.config();
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Initialize express app
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server);
+const io = new Server(server);
 const port = process.env.PORT || 3000;
 
 // Initialize socket service

@@ -1,8 +1,11 @@
-const mongoose = require('mongoose');
-require('dotenv').config();
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+
+// Initialize environment variables
+dotenv.config();
 
 // Database configuration with correct collection names
-const dbConfig = {
+export const dbConfig = {
   uri: process.env.MONGODB_URI,
   dbName: 'sensorData',
   collections: {
@@ -13,7 +16,7 @@ const dbConfig = {
   }
 };
 
-async function connectDB() {
+export async function connectDB() {
   try {
     await mongoose.connect(dbConfig.uri);
     console.log('Connected to MongoDB Atlas using Mongoose');
@@ -23,4 +26,4 @@ async function connectDB() {
   }
 }
 
-module.exports = { connectDB, dbConfig };
+export default { connectDB, dbConfig };

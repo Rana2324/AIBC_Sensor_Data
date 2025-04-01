@@ -1,7 +1,8 @@
+import logger from '../config/logger.js';
+import mongoose from 'mongoose';
+import os from 'os';
+
 let io;
-const logger = require('../config/logger');
-const mongoose = require('mongoose');
-const os = require('os');
 let pollingInterval;
 let serverStatsInterval;
 let lastDataTimestamps = {}; // Track last seen data timestamps per sensor
@@ -604,7 +605,7 @@ const emitPersonalityUpdate = (data) => {
     }
 };
 
-module.exports = {
+export {
     initSocket,
     emitSensorData,
     emitAlert,

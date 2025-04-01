@@ -1,6 +1,7 @@
-const express = require('express');
+import express from 'express';
+import * as sensorController from '../controllers/sensorController.js';
+
 const router = express.Router();
-const sensorController = require('../controllers/sensorController');
 
 // Sensor data endpoints
 router.get('/sensor-data/latest', sensorController.getLatestData);
@@ -11,4 +12,4 @@ router.get('/alerts', sensorController.getAlerts);
 router.get('/settings', sensorController.getSettings);
 router.get('/personality', sensorController.getPersonalityData);
 
-module.exports = router;
+export default router;

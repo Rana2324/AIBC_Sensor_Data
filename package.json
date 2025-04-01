@@ -2,6 +2,7 @@
   "name": "aibc-sensor-data",
   "version": "1.0.0",
   "description": "A web application for displaying sensor data with Express, MongoDB, and EJS",
+  "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

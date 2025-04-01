@@ -1,9 +1,9 @@
-const SensorData = require('../models/SensorData');
-const mongoose = require('mongoose');
-const logger = require('../config/logger');
-const socketService = require('../services/socketService');
+import SensorData from '../models/SensorData.js';
+import mongoose from 'mongoose';
+import logger from '../config/logger.js';
+import * as socketService from '../services/socketService.js';
 
-exports.renderSensorData = async (req, res) => {
+export const renderSensorData = async (req, res) => {
   try {
     // Set up collection references using the specified database and collection names
     const db = mongoose.connection.db;
@@ -170,7 +170,7 @@ function formatPersonalityContent(item) {
 }
 
 // API endpoint to get latest data for all sensors
-exports.getLatestData = async (req, res) => {
+export const getLatestData = async (req, res) => {
   try {
     const db = mongoose.connection.db;
     const temperatureReadings = db.collection('temperature_readings');
@@ -223,7 +223,7 @@ exports.getLatestData = async (req, res) => {
 };
 
 // API endpoint to get latest data for a specific sensor
-exports.getLatestDataBySensorId = async (req, res) => {
+export const getLatestDataBySensorId = async (req, res) => {
   try {
     const { sensorId } = req.params;
     const db = mongoose.connection.db;
@@ -267,7 +267,7 @@ exports.getLatestDataBySensorId = async (req, res) => {
 };
 
 // API endpoint to get alerts
-exports.getAlerts = async (req, res) => {
+export const getAlerts = async (req, res) => {
   try {
     const db = mongoose.connection.db;
     const alertsLog = db.collection('alerts_log');
@@ -294,7 +294,7 @@ exports.getAlerts = async (req, res) => {
 };
 
 // API endpoint to get settings
-exports.getSettings = async (req, res) => {
+export const getSettings = async (req, res) => {
   try {
     const db = mongoose.connection.db;
     const settingsHistory = db.collection('settings_history');
@@ -322,7 +322,7 @@ exports.getSettings = async (req, res) => {
 };
 
 // API endpoint to get personality data
-exports.getPersonalityData = async (req, res) => {
+export const getPersonalityData = async (req, res) => {
   try {
     const db = mongoose.connection.db;
     const personalityHistory = db.collection('personality_history');
@@ -349,7 +349,7 @@ exports.getPersonalityData = async (req, res) => {
 };
 
 // Add dashboard render controller if needed
-exports.renderDashboard = async (req, res) => {
+export const renderDashboard = async (req, res) => {
   try {
     res.render("dashboard", {
       title: "Real-Time Sensor Dashboard"
@@ -361,7 +361,7 @@ exports.renderDashboard = async (req, res) => {
 };
 
 // Get the latest alert records for the dashboard
-exports.getLatestAlertData = async (req, res) => {
+export const getLatestAlertData = async (req, res) => {
   try {
     const db = mongoose.connection.db;
     const alertsLog = db.collection('alerts_log');

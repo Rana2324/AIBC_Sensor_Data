@@ -1,5 +1,5 @@
-const mongoose = require('mongoose');
-const { dbConfig } = require('../config/db');
+import mongoose from 'mongoose';
+import { dbConfig } from '../config/db.js';
 
 // Define schemas with collection names matching exactly what's in MongoDB
 const temperatureReadingSchema = new mongoose.Schema({
@@ -187,4 +187,4 @@ class SensorData {
   }
 }
 
-module.exports = SensorData;
+export default SensorData;

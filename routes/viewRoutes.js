@@ -1,6 +1,7 @@
-const express = require('express');
+import express from 'express';
+import * as sensorController from '../controllers/sensorController.js';
+
 const router = express.Router();
-const sensorController = require('../controllers/sensorController');
 
 // Main route redirects to sensor data page
 router.get('/', (req, res) => {
@@ -10,4 +11,4 @@ router.get('/', (req, res) => {
 // Route to render the sensor data page
 router.get('/sensor-data', sensorController.renderSensorData);
 
-module.exports = router;
+export default router;
