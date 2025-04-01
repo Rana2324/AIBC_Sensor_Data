@@ -44,9 +44,12 @@ body {
 }
 
 .container {
-  max-width: 1600px;
+  width: 100%;
   margin: 0 auto;
   padding: 15px;
+}
+.container h1{
+  margin-left: 147px;
 }
 
 .navbar {
@@ -61,37 +64,48 @@ body {
   font-weight: bold;
 }
 
-/* Sensor Panels Grid Layout - Updated for exact 3-column layout */
+
+/* Sensor Panels Grid Layout - Fixed for exactly 3 equal columns side by side with smaller gap */
 .sensor-panels {
   display: grid;
-  grid-template-columns: repeat(3, 1fr); /* Exactly 3 equal columns */
-  gap: 20px;
+  grid-template-columns: repeat(3, 1fr); /* Always show 3 equal columns */
+  gap: 50px; /* Reduced gap between sensor panels */
   width: 100%;
+  padding: 5px;
+  box-sizing: border-box;
+ 
 }
 
 /* Make each sensor section a self-contained unit with its own scrolling */
-.sensor-panels > .sensor-data-section {
+.sensor-panels > .sensor-data-section,
+.sensor-panels > .sensor-placeholder {
   height: auto;
   max-height: calc(100vh - 150px);
   overflow-y: auto;
   border: 1px solid var(--gray-300);
   border-radius: 12px;
   width: 100%; /* Ensure full width within its grid cell */
+  padding: 20px;
+  margin: 0; 
+  box-shadow: var(--shadow-md);
+  background-color: white;
+  
+  
 }
 
-/* Ensure single sensor can take full width if needed */
-.sensor-panels.single-sensor {
-  grid-template-columns: 1fr;
+/* Hover effect for all sensor panels */
+.sensor-panels > .sensor-data-section:hover,
+.sensor-panels > .sensor-placeholder:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  transition: all 0.3s ease;
 }
 
-/* For two sensors, use 50% each */
-.sensor-panels.two-sensors {
-  grid-template-columns: repeat(3, 1fr);
-}
-
-/* For three or more sensors, use three equal columns */
-.sensor-panels.three-plus-sensors {
-  grid-template-columns: repeat(3, 1fr);
+/* Ensure consistent spacing inside the sensor panel */
+.sensor-panels > .sensor-data-section > .sensor-header {
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--gray-200);
+  padding-bottom: 15px;
 }
 
 /* Adjust the inner data section to not conflict with parent */
@@ -148,13 +162,15 @@ body {
 
 /* Tab Container and Navigation */
 .tab-container {
-  margin: 20px 0;
+  /* margin: 20px 0; */
   background: white;
   border-radius: 16px;
   box-shadow: var(--shadow-md);
   overflow: hidden;
   border: 1px solid var(--gray-200);
-  width: 100%;
+  width: 90%;
+  max-width: 1600px;
+  margin: 20px auto;
 }
 
 .tab-nav {
@@ -308,6 +324,7 @@ body {
   font-weight: 600;
   display: flex;
   align-items: center;
+  transition: all 0.3s ease;
 }
 
 .sensor-status::before {
@@ -317,6 +334,7 @@ body {
   height: 10px;
   border-radius: 50%;
   margin-right: 8px;
+  transition: all 0.3s ease;
 }
 
 .sensor-status.active {
@@ -339,6 +357,17 @@ body {
 
 .sensor-status.inactive::before {
   background-color: #9E9E9E;
+}
+
+/* Animation for status changes */
+@keyframes statusChangePulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); box-shadow: 0 0 10px rgba(0,0,0,0.2); }
+  100% { transform: scale(1); }
+}
+
+.sensor-status.status-changed {
+  animation: statusChangePulse 0.8s ease;
 }
 
 /* === HISTORY TABLE STYLES === */
@@ -581,6 +610,8 @@ body {
 
 .table-danger {
   background-color: #ffebee !important;
+  color: red !important;
+ 
 }
 
 .table-danger:hover {
@@ -794,6 +825,102 @@ tbody tr:first-child {
   font-size: 0.75rem;
   color: #757575;
   margin-right: 10px;
+}
+
+/* Empty sensor placeholder styling - enhanced to match real sensor cards */
+.sensor-placeholder {
+  background-color: white;
+  border: 1px solid var(--gray-300);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  min-height: 300px;
+}
+
+.sensor-placeholder .placeholder-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 15px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.sensor-placeholder h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--dark);
+  display: flex;
+  align-items: center;
+}
+
+.sensor-placeholder .placeholder-icon {
+  margin-right: 10px;
+  font-size: 1.8rem;
+  color: var(--gray-500);
+}
+
+.sensor-placeholder .placeholder-status {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  background-color: rgba(158, 158, 158, 0.2);
+  color: #9E9E9E;
+  border: 1px solid rgba(158, 158, 158, 0.3);
+}
+
+.sensor-placeholder .placeholder-status::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 8px;
+  background-color: #9E9E9E;
+}
+
+.sensor-placeholder .placeholder-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-grow: 1;
+  padding: 30px 20px;
+  color: var(--gray-500);
+  text-align: center;
+}
+
+.sensor-placeholder p {
+  margin: 10px 0;
+  color: var(--gray-600);
+}
+
+/* Temperature threshold colors */
+:root {
+  --temp-danger: #ffebee;  /* Light red background for temperature warning */
+}
+
+/* Temperature threshold highlighting for data tables */
+.data-table td.temp-danger {
+  background-color: var(--temp-danger);
+  color: red;
+  font-weight: 500;
+}
+
+/* Add subtle pulsing to temperature danger cells on first load */
+@keyframes tempWarningPulse {
+  0% { background-color: var(--temp-danger); }
+  50% { background-color: #ffe6e6; }
+  100% { background-color: var(--temp-danger); }
+}
+
+.data-table td.temp-danger.new-temp-warning {
+  animation: tempWarningPulse 2s ease-in-out;
 }
 
 
