@@ -137,6 +137,29 @@ export const renderSensorData = async (req, res) => {
           { timestamp: { $gt: oneSecondAgo } }
         ] 
       });
+      
+    // Calculate today's data count
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    
+    const todayDataCount = await temperatureReadings.countDocuments({
+      $or: [
+        { created_at: { $gte: startOfToday } },
+        { timestamp: { $gte: startOfToday } }
+      ]
+    });
+    
+    // Calculate today's alert count
+    const todayAlertCount = await alertsLog.countDocuments({
+      $or: [
+        { created_at: { $gte: startOfToday } },
+        { timestamp: { $gte: startOfToday } }
+      ]
+    });
+    
+    // Get database stats for size information
+    const dbStats = await db.stats();
+    const dbSizeBytes = dbStats.dataSize || 0;
     
     res.render("sensorData", {
       latestReadings,
@@ -145,9 +168,12 @@ export const renderSensorData = async (req, res) => {
         totalSensors: latestReadings.length,
         activeSensors: activeReadings.length,
         totalDataPoints: latestReadings.reduce((acc, sensor) => {
-          acc[sensor.sensorId] = sensor.data.length;
-          return acc;
-        }, {})
+          // Sum up the number of data points across all sensors
+          return acc + (sensor.data ? sensor.data.length : 0);
+        }, 0),
+        todayDataPoints: todayDataCount,
+        todayAlerts: todayAlertCount,
+        dbSize: dbSizeBytes
       }
     });
   } catch (error) {

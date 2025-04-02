@@ -136,12 +136,18 @@ async function collectDataStats() {
         startOfToday.setHours(0, 0, 0, 0);
         
         const todayDataPoints = await temperatureReadings.countDocuments({
-            timestamp: { $gte: startOfToday }
+            $or: [
+                { timestamp: { $gte: startOfToday } },
+                { created_at: { $gte: startOfToday } }
+            ]
         });
         
         // Get today's alerts count
         const todayAlerts = await alertsLog.countDocuments({
-            timestamp: { $gte: startOfToday }
+            $or: [
+                { timestamp: { $gte: startOfToday } },
+                { created_at: { $gte: startOfToday } }
+            ]
         });
         
         // Get database size (not perfectly accurate but a good estimate)

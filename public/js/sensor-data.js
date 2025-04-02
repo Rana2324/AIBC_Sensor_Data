@@ -1088,3 +1088,54 @@ function refreshBlockchainHistory() {
   // Pulse the real-time indicator
   pulseRealTimeIndicator(null, 'blockchain');
 }
+
+// Update data statistics function
+function updateDataStats(data) {
+  if (!data) return;
+  
+  // Update total data points
+  const totalDataPoints = document.getElementById('total-data-points');
+  if (totalDataPoints) {
+    totalDataPoints.textContent = data.totalDataPoints || 0;
+  }
+  
+  // Update today's data count
+  const todayDataPoints = document.getElementById('today-data-points');
+  if (todayDataPoints) {
+    todayDataPoints.textContent = data.todayDataPoints || 0;
+  }
+  
+  // Update today's alert count
+  const todayAlerts = document.getElementById('today-alerts');
+  if (todayAlerts) {
+    todayAlerts.textContent = data.todayAlerts || 0;
+  }
+  
+  // Update database size
+  const dbSize = document.getElementById('db-size');
+  if (dbSize && data.dbSize) {
+    const sizeInMB = (data.dbSize / (1024 * 1024)).toFixed(2);
+    dbSize.textContent = `${sizeInMB} MB`;
+  }
+  
+  // Update timestamp
+  updateTimestamp('data-stats-last-updated');
+}
+
+// Function to pulse the server real-time indicator
+function pulseServerRealTimeIndicator() {
+  const indicator = document.getElementById('server-realtime-indicator');
+  if (!indicator) return;
+  
+  // Find the dot element within the indicator
+  const dot = indicator.querySelector('.realtime-dot');
+  if (dot) {
+    // Add the active-pulse class (matches the CSS animation class)
+    dot.classList.add('active-pulse');
+    
+    // Remove the class after the animation completes
+    setTimeout(() => {
+      dot.classList.remove('active-pulse');
+    }, 2000);
+  }
+}
