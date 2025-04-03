@@ -42,16 +42,26 @@ function setupSocketIO() {
   
   // Connection status indicators
   socket.on('connect', () => {
-    console.log('Connected to server');
+    console.log('Socket connected with ID:', socket.id);
+    logger.info('Connected to server with socket ID:', socket.id);
     const connectionStatus = document.getElementById('connection-status');
     if (connectionStatus) {
       connectionStatus.textContent = '接続済み';
       connectionStatus.className = 'connection-status connected';
     }
+    
+    // Request data immediately upon connection
+    console.log('Requesting initial data...');
+    logger.info('Requesting initial data...');
+    socket.emit('requestFullData');
+    socket.emit('requestServerStats');
   });
   
+  // Remove automatic refresh timer - only update on actual data events from server
+  
   socket.on('disconnect', () => {
-    console.log('Disconnected from server');
+    console.log('Socket disconnected');
+    logger.warn('Disconnected from server');
     const connectionStatus = document.getElementById('connection-status');
     if (connectionStatus) {
       connectionStatus.textContent = '切断';
@@ -59,12 +69,40 @@ function setupSocketIO() {
     }
   });
   
+  // Add more detailed error handling
+  socket.on('connect_error', (error) => {
+    console.error('Socket connection error:', error);
+    logger.error('Socket connection error:', error.message);
+  });
+  
+  socket.on('error', (error) => {
+    console.error('Socket error:', error);
+    logger.error('Socket error:', error.message);
+  });
+  
   // Track last received data timestamps per sensor to avoid duplicate updates
   const lastReceivedTimestamps = {};
   
+  // Direct handler for newSensorData event from API
+  socket.on('newSensorData', (data) => {
+    console.log('Received new sensor data:', data);
+    logger.info('Received new sensor data for:', data.sensorId || data.sensor_id);
+    
+    // Create the format that handleFullSensorData expects
+    const formattedData = {
+      sensorId: data.sensorId || data.sensor_id,
+      readings: [data]
+    };
+    
+    if (handleFullSensorData(formattedData)) {
+      pulseRealTimeIndicator(formattedData.sensorId);
+    }
+  });
+  
   // Data event handlers
   socket.on('fullSensorData', (data) => {
-    console.log('Received full sensor data:', data.sensorId);
+    console.log('Received full sensor data:', data);
+    logger.info('Received full sensor data:', data.sensorId);
     if (handleFullSensorData(data)) {
       // Only pulse if there's new data
       pulseRealTimeIndicator(data.sensorId);
@@ -72,7 +110,7 @@ function setupSocketIO() {
   });
   
   socket.on('sensorDataUpdate', (data) => {
-    console.log('Received sensor data update:', data.sensorId);
+    logger.info('Received sensor data update:', data.sensorId);
     // Check if this is actually new data
     const isNewData = handleFullSensorData(data, lastReceivedTimestamps);
     if (isNewData) {
@@ -81,12 +119,12 @@ function setupSocketIO() {
   });
   
   socket.on('fullAlertsData', (data) => {
-    console.log('Received full alerts data');
+    logger.info('Received full alerts data');
     handleFullAlertsData(data);
   });
   
   socket.on('alertsUpdate', (data) => {
-    console.log('Received alerts update');
+    logger.info('Received alerts update');
     // Check if this contains new alerts
     const newAlerts = handleFullAlertsData(data, true);
     
@@ -109,45 +147,45 @@ function setupSocketIO() {
   });
   
   socket.on('fullSettingsData', (data) => {
-    console.log('Received full settings data');
+    logger.info('Received full settings data');
     handleFullSettingsData(data);
   });
   
   socket.on('settingsUpdate', (data) => {
-    console.log('Received settings update');
+    logger.info('Received settings update');
     handleFullSettingsData(data);
   });
   
   socket.on('fullPersonalityData', (data) => {
-    console.log('Received full personality data');
+    logger.info('Received full personality data');
     handleFullPersonalityData(data);
   });
   
   socket.on('personalityUpdate', (data) => {
-    console.log('Received personality update');
+    logger.info('Received personality update');
     handleFullPersonalityData(data);
   });
   
   // Server statistics handlers
   socket.on('serverStats', (data) => {
-    console.log('Received server stats:', data);
+    logger.info('Received server stats:', data);
     updateServerStats(data);
     pulseServerRealTimeIndicator();
   });
   
   socket.on('performanceStats', (data) => {
-    console.log('Received performance stats:', data);
+    logger.info('Received performance stats:', data);
     updatePerformanceStats(data);
     pulseRealTimeIndicator(null, 'performance');
   });
   
   socket.on('dataStats', (data) => {
-    console.log('Received data stats:', data);
+    logger.info('Received data stats:', data);
     updateDataStats(data);
   });
   
   socket.on('dataHeartbeat', (data) => {
-    console.log('Received heartbeat:', data.timestamp);
+    logger.debug('Received heartbeat:', data.timestamp);
     // Just update timestamps without pulsing indicators
     document.querySelectorAll('.last-updated').forEach(el => {
       if (!el.id.includes('data-last-updated') && !el.id.includes('alert-last-updated')) {
@@ -160,22 +198,6 @@ function setupSocketIO() {
         el.textContent = `最終更新: ${formattedTime}`;
       }
     });
-  });
-  
-  // Setup automatic refresh every 60 seconds
-  setInterval(() => {
-    if (socket.connected) {
-      console.log('Auto-refreshing data...');
-      socket.emit('requestFullData');
-      socket.emit('requestServerStats');
-    }
-  }, 60000);
-  
-  // Initial data request on connection
-  socket.on('connect', () => {
-    console.log('Requesting initial data...');
-    socket.emit('requestFullData');
-    socket.emit('requestServerStats');
   });
 }
 
@@ -206,23 +228,32 @@ function styleTemperatureCell(td, tempValue) {
 function handleFullSensorData(data, timestampTracker) {
   if (!data || !data.sensorId || !Array.isArray(data.readings)) return false;
 
-  const tbody = document.getElementById(`tbody-${data.sensorId}`);
-  if (!tbody) return false;
+  // Try to get the tbody element
+  const sensorId = data.sensorId || data.sensor_id;
+  const tbody = document.getElementById(`tbody-${sensorId}`);
+  if (!tbody) {
+    console.warn(`No tbody found for sensor ${sensorId}`);
+    return false;
+  }
 
   // Check if this is actually new data by comparing latest timestamp
   let isNewData = false;
   if (data.readings.length > 0) {
-    const latestTimestamp = new Date(data.readings[0].timestamp).getTime();
+    const latestReading = data.readings[0];
+    // Extract timestamp from reading - handle different formats
+    const timestamp = latestReading.timestamp || latestReading.created_at || new Date();
+    const latestTimestamp = new Date(timestamp).getTime();
 
     // If we're tracking timestamps between calls
     if (timestampTracker) {
-      const prevTimestamp = timestampTracker[data.sensorId];
+      const prevTimestamp = timestampTracker[sensorId];
       // Only consider as new data if timestamp is newer or we have no previous record
       isNewData = !prevTimestamp || latestTimestamp > prevTimestamp;
       if (isNewData) {
-        timestampTracker[data.sensorId] = latestTimestamp;
+        timestampTracker[sensorId] = latestTimestamp;
+        console.log(`New data for ${sensorId}, timestamp: ${new Date(latestTimestamp).toISOString()}`);
       } else {
-        console.log(`Ignoring data for ${data.sensorId} - not new`);
+        console.log(`Ignoring data for ${sensorId} - not new`, prevTimestamp, latestTimestamp);
       }
     } else {
       isNewData = true;
@@ -232,9 +263,9 @@ function handleFullSensorData(data, timestampTracker) {
     if (isNewData) {
       // Consider a sensor active if we have received data in the last 5 minutes
       const now = new Date();
-      const lastReading = new Date(data.readings[0].timestamp);
-      const isActive = (now - lastReading) < (5 * 60 * 1000);
-      updateSensorStatus(data.sensorId, isActive);
+      const lastReadingTime = new Date(timestamp);
+      const isActive = (now - lastReadingTime) < (5 * 60 * 1000);
+      updateSensorStatus(sensorId, isActive);
     }
   }
 
@@ -244,12 +275,43 @@ function handleFullSensorData(data, timestampTracker) {
   // Add new rows
   data.readings.forEach(reading => {
     const tr = document.createElement('tr');
-    if (reading.isAbnormal) tr.classList.add('table-danger');
+    
+    // Handle isAbnormal field - calculate if not present
+    let isAbnormal = reading.isAbnormal;
+    if (isAbnormal === undefined) {
+      // Get temperature data from the appropriate field
+      const temperatures = reading.temperature_data || reading.temperatures || [];
+      
+      // Convert strings to numbers if needed
+      const validTemps = temperatures.map(temp => 
+          typeof temp === 'string' ? parseFloat(temp) : temp
+        ).filter(temp => temp !== null && temp !== undefined && !isNaN(temp));
+      
+      // Calculate abnormality based on temperature rules
+      isAbnormal = validTemps.some(temp => temp < 20 || temp > 26) ||
+        (validTemps.length > 1 && Math.max(...validTemps) - Math.min(...validTemps) > 5);
+    }
+    
+    if (isAbnormal) tr.classList.add('table-danger');
 
     // Format date and time
-    const timestamp = new Date(reading.timestamp);
-    const dateStr = timestamp.toLocaleDateString('ja-JP');
-    const timeStr = timestamp.toLocaleTimeString('ja-JP');
+    let timestamp;
+    if (reading.timestamp) {
+      timestamp = new Date(reading.timestamp);
+    } else if (reading.created_at) {
+      // Handle created_at in format "2025/04/02 16:24:34.347"
+      if (typeof reading.created_at === 'string' && reading.created_at.includes(' ')) {
+        timestamp = new Date(reading.created_at.replace(' ', 'T'));
+      } else {
+        timestamp = new Date(reading.created_at);
+      }
+    } else {
+      timestamp = new Date();
+    }
+    
+    // Use acquisitionDate/Time from reading or format from timestamp
+    const dateStr = reading.acquisitionDate || reading.date || timestamp.toLocaleDateString('ja-JP');
+    const timeStr = reading.acquisitionTime || reading.time || timestamp.toLocaleTimeString('ja-JP');
 
     // Create date cell
     const dateCell = document.createElement('td');
@@ -261,12 +323,18 @@ function handleFullSensorData(data, timestampTracker) {
     timeCell.textContent = timeStr;
     tr.appendChild(timeCell);
 
-    // Create temperature cells
-    const temperatures = reading.temperatures || [];
+    // Create temperature cells - prioritize temperature_data from API
+    const temperatures = reading.temperature_data || reading.temperatures || [];
     for (let i = 0; i < 16; i++) {
       const td = document.createElement('td');
-      const tempValue = temperatures[i];
-      td.textContent = tempValue !== undefined && tempValue !== null 
+      let tempValue = temperatures[i];
+      
+      // Convert string to number if needed
+      if (typeof tempValue === 'string') {
+        tempValue = parseFloat(tempValue);
+      }
+      
+      td.textContent = tempValue !== undefined && tempValue !== null && !isNaN(tempValue)
         ? tempValue.toFixed(1) 
         : '--';
 
@@ -276,10 +344,16 @@ function handleFullSensorData(data, timestampTracker) {
       tr.appendChild(td);
     }
 
-    // Create average temperature cell
+    // Create average temperature cell - use average_temp from API if available
     const avgTempCell = document.createElement('td');
-    const avgTemp = reading.temperature_ave;
-    avgTempCell.textContent = avgTemp !== undefined && avgTemp !== null 
+    let avgTemp = reading.average_temp || reading.temperature_ave;
+    
+    // Convert string to number if needed
+    if (typeof avgTemp === 'string') {
+      avgTemp = parseFloat(avgTemp);
+    }
+    
+    avgTempCell.textContent = avgTemp !== undefined && avgTemp !== null && !isNaN(avgTemp)
       ? `${avgTemp.toFixed(1)} °C` 
       : '--';
 
@@ -290,7 +364,7 @@ function handleFullSensorData(data, timestampTracker) {
 
     // Create status cell
     const statusCell = document.createElement('td');
-    statusCell.textContent = reading.isAbnormal ? '異常' : '正常';
+    statusCell.textContent = isAbnormal ? '異常' : '正常';
     tr.appendChild(statusCell);
 
     tbody.appendChild(tr);
@@ -298,7 +372,7 @@ function handleFullSensorData(data, timestampTracker) {
 
   // Only update timestamp indicators if this is new data
   if (isNewData) {
-    updateDataLastUpdated(data.sensorId);
+    updateDataLastUpdated(sensorId);
   }
 
   return isNewData;

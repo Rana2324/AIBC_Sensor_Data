@@ -41,7 +41,7 @@ export const renderSensorData = async (req, res) => {
         const temperatures = reading.temperature_data || reading.temperatures || [];
         
         // Calculate if temperature is abnormal
-        const validTemps = temperatures.filter(temp => temp !== null && temp !== undefined);
+        const validTemps = convertTemperatures(temperatures);
         const isAbnormal = validTemps.some(temp => temp < 20 || temp > 26) ||
           Math.max(...validTemps) - Math.min(...validTemps) > 5;
         
@@ -195,6 +195,13 @@ function formatPersonalityContent(item) {
   }
 }
 
+// Helper function to convert temperature values if they're strings
+function convertTemperatures(temps) {
+  if (!Array.isArray(temps)) return [];
+  return temps.map(temp => typeof temp === 'string' ? parseFloat(temp) : temp)
+    .filter(temp => temp !== null && temp !== undefined && !isNaN(temp));
+}
+
 // API endpoint to get latest data for all sensors
 export const getLatestData = async (req, res) => {
   try {
@@ -219,7 +226,7 @@ export const getLatestData = async (req, res) => {
       const temperatures = reading.temperature_data || reading.temperatures || [];
       
       // Calculate abnormality
-      const validTemps = temperatures.filter(temp => temp !== null && temp !== undefined);
+      const validTemps = convertTemperatures(temperatures);
       const isAbnormal = validTemps.some(temp => temp < 20 || temp > 26) ||
         Math.max(...validTemps) - Math.min(...validTemps) > 5;
       
@@ -268,7 +275,7 @@ export const getLatestDataBySensorId = async (req, res) => {
       const temperatures = reading.temperature_data || reading.temperatures || [];
       
       // Calculate if temperature is abnormal
-      const validTemps = temperatures.filter(temp => temp !== null && temp !== undefined);
+      const validTemps = convertTemperatures(temperatures);
       const isAbnormal = validTemps.some(temp => temp < 20 || temp > 26) ||
         Math.max(...validTemps) - Math.min(...validTemps) > 5;
       

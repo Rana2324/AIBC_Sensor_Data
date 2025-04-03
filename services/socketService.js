@@ -1,6 +1,7 @@
 import logger from '../config/logger.js';
 import mongoose from 'mongoose';
 import os from 'os';
+import * as apiService from './apiService.js'; // Import the API service
 
 let io;
 let pollingInterval;
@@ -214,6 +215,9 @@ const stopServerStatsMonitoring = () => {
 // Socket.IO connection handling
 const initSocket = (socketIo) => {
     io = socketIo;
+    
+    // Set up API service integration
+    setupApiServiceIntegration();
     
     io.on('connection', (socket) => {
         logger.info('Client connected');
@@ -611,10 +615,166 @@ const emitPersonalityUpdate = (data) => {
     }
 };
 
+// Add new function to emit data received from the API
+const emitApiData = (sensorData) => {
+  if (!io) return;
+  
+  try {
+    // Process each reading and emit to clients
+    sensorData.forEach(reading => {
+      // Get the sensor_id or sensorId from the reading
+      const sensorId = reading.sensor_id || reading.sensorId;
+      
+      // Skip invalid readings
+      if (!sensorId) {
+        logger.warn('Skipping reading with missing sensor_id');
+        return;
+      }
+      
+      // Add timestamp and calculate abnormality if not present
+      let temperatures = reading.temperature_data || reading.temperatures || [];
+      
+      // Convert temperatures from strings to numbers if needed
+      if (Array.isArray(temperatures)) {
+        temperatures = temperatures.map(temp => 
+          typeof temp === 'string' ? parseFloat(temp) : temp
+        );
+      }
+      
+      const validTemps = temperatures.filter(temp => temp !== null && temp !== undefined && !isNaN(temp));
+      
+      // Handle date and time
+      let dateStr = reading.date;
+      let timeStr = reading.time;
+      
+      // If created_at is a string like "2025/04/02 16:24:34.347", parse it into date and time
+      if (reading.created_at && typeof reading.created_at === 'string') {
+        const parts = reading.created_at.split(' ');
+        if (parts.length === 2) {
+          if (!dateStr) dateStr = parts[0];
+          if (!timeStr) timeStr = parts[1];
+        }
+      }
+      
+      // Format average_temp if it's a string
+      let avgTemp = reading.average_temp || reading.temperature_ave;
+      if (typeof avgTemp === 'string') {
+        avgTemp = parseFloat(avgTemp);
+      }
+      
+      // Calculate abnormality
+      const isAbnormal = reading.is_abnormal || reading.isAbnormal || 
+        validTemps.some(temp => temp < 20 || temp > 26) ||
+        (validTemps.length > 1 && Math.max(...validTemps) - Math.min(...validTemps) > 5);
+      
+      const processedData = {
+        ...reading,
+        sensorId: sensorId,
+        sensor_id: sensorId,  // Include both formats to ensure compatibility
+        timestamp: new Date(),
+        temperatures: temperatures,
+        temperature_ave: avgTemp,
+        isAbnormal: isAbnormal,
+        acquisitionDate: dateStr || new Date().toLocaleDateString('ja-JP'),
+        acquisitionTime: timeStr || new Date().toLocaleTimeString('ja-JP'),
+        status: reading.status || (isAbnormal ? 'anomaly' : 'normal')
+      };
+      
+      // IMPORTANT: Send two events to ensure compatbility with all listeners
+      // 1. Send as newSensorData for direct handlers
+      io.emit('newSensorData', processedData);
+      
+      // 2. Send in the format that handleFullSensorData expects
+      io.emit('fullSensorData', {
+        sensorId: sensorId,
+        readings: [processedData]
+      });
+      
+      // 3. Send as sensorDataUpdate for continuous updates
+      io.emit('sensorDataUpdate', {
+        sensorId: sensorId,
+        readings: [processedData]
+      });
+      
+      logger.info(`Emitted API data for sensor ${sensorId} in multiple formats`);
+      
+      // If abnormal, also emit an alert
+      if (isAbnormal) {
+        const alert = {
+          sensorId: sensorId,
+          sensor_id: sensorId,
+          timestamp: new Date(),
+          event: '温度異常を検出しました',
+          eventType: 'TEMPERATURE_ABNORMAL',
+          date: dateStr || new Date().toLocaleDateString('ja-JP'),
+          time: timeStr || new Date().toLocaleTimeString('ja-JP'),
+          alert_reason: '温度異常を検出しました',
+          alertReason: '温度異常を検出しました'  // Include both formats
+        };
+        emitAlert(alert);
+      }
+    });
+    
+    // Send a heartbeat to clients to update the "last updated" timestamp
+    io.emit('dataHeartbeat', { timestamp: new Date() });
+    
+    // Log our success
+    logger.info(`Successfully emitted ${sensorData.length} readings from API`);
+  } catch (error) {
+    logger.error('Error emitting API data:', error);
+  }
+};
+
+// Configure API service to use socket notifications
+const setupApiServiceIntegration = () => {
+  // Listen for successful API data fetches
+  apiService.callbacks.onDataFetched = (data) => {
+    emitApiData(data);
+  };
+  
+  // Listen for API alerts
+  apiService.callbacks.onAlertsFetched = (alerts) => {
+    alerts.forEach(alert => {
+      const processedAlert = {
+        ...alert,
+        sensorId: alert.sensor_id || alert.sensorId,
+        timestamp: alert.timestamp || new Date(),
+        date: alert.date || new Date().toLocaleDateString('ja-JP'),
+        time: alert.time || new Date().toLocaleTimeString('ja-JP'),
+        alertReason: alert.alert_reason || alert.alertReason || alert.message || 'Unknown alert',
+        event: alert.alert_reason || alert.alertReason || alert.message || 'Unknown alert',
+        eventType: alert.status || 'ALERT'
+      };
+      emitAlert(processedAlert);
+    });
+  };
+  
+  // Listen for API settings changes
+  apiService.callbacks.onSettingsFetched = (settings) => {
+    settings.forEach(setting => {
+      const processedSetting = {
+        ...setting,
+        sensorId: setting.sensor_id || setting.sensorId,
+        timestamp: setting.timestamp || new Date(),
+        date: setting.date || new Date().toLocaleDateString('ja-JP'),
+        time: setting.time || new Date().toLocaleTimeString('ja-JP'),
+        content: setting.content || `設定変更: ${setting.value || JSON.stringify(setting.value)}`
+      };
+      emitSettingChange(processedSetting);
+    });
+  };
+  
+  logger.info('API service integration with Socket.IO configured');
+};
+
 export {
     initSocket,
     emitSensorData,
     emitAlert,
     emitSettingChange,
-    emitPersonalityUpdate
+    emitPersonalityUpdate,
+    emitApiData,  // Export the new function
+    startDataPolling,
+    stopDataPolling,
+    sendServerStatsToAll
 };

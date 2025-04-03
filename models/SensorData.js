@@ -1,54 +1,17 @@
 import mongoose from 'mongoose';
+import TemperatureReading from './schemas/TemperatureSchema.js';
+import Alert from './schemas/AlertSchema.js';
+import Setting from './schemas/SettingSchema.js';
+import Personality from './schemas/PersonalitySchema.js';
 import { dbConfig } from '../config/db.js';
-
-// Define schemas with collection names matching exactly what's in MongoDB
-const temperatureReadingSchema = new mongoose.Schema({
-  sensorId: { type: String, required: true },
-  timestamp: { type: Date, default: Date.now },
-  temperatures: [Number],
-  isAbnormal: Boolean
-}, { collection: 'temperature_readings' });
-
-const alertSchema = new mongoose.Schema({
-  sensorId: { type: String, required: true },
-  timestamp: { type: Date, default: Date.now },
-  date: Date,
-  alertReason: String,
-  status: String,
-  createdAt: Date,
-  event: String,
-  eventType: String,
-  value: Number
-}, { collection: 'alerts_log' });
-
-const settingSchema = new mongoose.Schema({
-  sensorId: { type: String, required: true },
-  timestamp: { type: Date, default: Date.now },
-  content: String,
-  changeType: String,
-  value: mongoose.Schema.Types.Mixed
-}, { collection: 'settings_history' });
-
-const personalitySchema = new mongoose.Schema({
-  sensorId: { type: String, required: true },
-  timestamp: { type: Date, default: Date.now },
-  content: String,
-  biasType: String,
-  biasValue: mongoose.Schema.Types.Mixed
-}, { collection: 'personality_history' });
-
-// Create models
-const TemperatureReading = mongoose.model('TemperatureReading', temperatureReadingSchema);
-const Alert = mongoose.model('Alert', alertSchema);
-const Setting = mongoose.model('Setting', settingSchema);
-const Personality = mongoose.model('Personality', personalitySchema);
+import logger from '../config/logger.js';
 
 class SensorData {
   static async getLatestReadings(limit = 100) {
     try {
       // Get unique sensor IDs
       const sensorIds = await TemperatureReading.distinct('sensorId');
-      console.log(`Found ${sensorIds.length} unique sensor IDs`);
+      logger.info(`Found ${sensorIds.length} unique sensor IDs`);
       
       // For each sensor, get their latest readings and check activity
       const readings = await Promise.all(sensorIds.map(async (sensorId) => {
@@ -58,7 +21,7 @@ class SensorData {
           .sort({ timestamp: -1 })
           .limit(100);
 
-        console.log(`Retrieved ${data.length} temperature readings for sensor ${sensorId}`);
+        logger.info(`Retrieved ${data.length} temperature readings for sensor ${sensorId}`);
 
         // Check if sensor is active (has data in last 5 seconds)
         const now = new Date();
@@ -73,9 +36,9 @@ class SensorData {
             .sort({ timestamp: -1 })
             .limit(10);
             
-          console.log(`Retrieved ${alerts.length} alerts for sensor ${sensorId}`);
+          logger.info(`Retrieved ${alerts.length} alerts for sensor ${sensorId}`);
         } catch (error) {
-          console.error(`Error fetching alerts for sensor ${sensorId}:`, error);
+          logger.error(`Error fetching alerts for sensor ${sensorId}:`, error);
           alerts = [];
         }
 
@@ -101,14 +64,31 @@ class SensorData {
           
           // Check for abnormal conditions
           const isAbnormal = validTemps.some(temp => temp < 20 || temp > 26) || 
-                            Math.max(...validTemps) - Math.min(...validTemps) > 5;
-
+                            (validTemps.length > 1 && Math.max(...validTemps) - Math.min(...validTemps) > 5);
+          
+          // Format date as YYYY/MM/DD
+          const date = reading.timestamp ? new Date(reading.timestamp) : new Date();
+          const acquisitionDate = date.toLocaleDateString('ja-JP', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          }).replace(/\//g, '/');
+          
+          // Format time as HH:MM:SS.xxx with milliseconds
+          const acquisitionTime = date.toLocaleTimeString('ja-JP', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+          }) + '.' + String(date.getMilliseconds()).padStart(3, '0');
+          
           return {
-            acquisitionDate: new Date(reading.timestamp).toLocaleDateString('ja-JP'),
-            acquisitionTime: new Date(reading.timestamp).toLocaleTimeString('ja-JP'),
+            acquisitionDate,
+            acquisitionTime,
             temperatures,
             averageTemperature,
-            isAbnormal
+            isAbnormal,
+            temperature_ave: reading.temperature_ave
           };
         });
 
@@ -116,30 +96,64 @@ class SensorData {
           sensorId,
           isActive,
           data: processedData,
-          alerts: alerts.map(alert => ({
-            date: alert.date ? new Date(alert.date).toLocaleDateString('ja-JP') : 
-                  alert.timestamp ? new Date(alert.timestamp).toLocaleDateString('ja-JP') : '-',
-            time: alert.date ? new Date(alert.date).toLocaleTimeString('ja-JP') :
-                 alert.timestamp ? new Date(alert.timestamp).toLocaleTimeString('ja-JP') : '-',
-            event: alert.alert_reason || alert.alertReason || '-',
-            eventType: alert.eventType || alert.status || '-'
-          })),
-          settings: settings.map(setting => ({
-            date: new Date(setting.timestamp).toLocaleDateString('ja-JP'),
-            time: new Date(setting.timestamp).toLocaleTimeString('ja-JP'),
-            content: setting.content || `${setting.changeType}: ${JSON.stringify(setting.value)}`
-          })),
-          personality: personality.map(item => ({
-            date: new Date(item.timestamp).toLocaleDateString('ja-JP'),
-            time: new Date(item.timestamp).toLocaleTimeString('ja-JP'),
-            content: item.content || `${item.biasType}: ${item.biasValue && item.biasValue.level ? item.biasValue.level : JSON.stringify(item.biasValue)}`
-          }))
+          alerts: alerts.map(alert => {
+            const date = alert.timestamp ? new Date(alert.timestamp) : new Date();
+            return {
+              date: date.toLocaleDateString('ja-JP', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+              }).replace(/\//g, '/'),
+              time: date.toLocaleTimeString('ja-JP', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+              }) + '.' + String(date.getMilliseconds()).padStart(3, '0'),
+              event: alert.alertReason || alert.alert_reason || '-',
+              eventType: alert.eventType || alert.status || '-'
+            };
+          }),
+          settings: settings.map(setting => {
+            const date = setting.timestamp ? new Date(setting.timestamp) : new Date();
+            return {
+              date: date.toLocaleDateString('ja-JP', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+              }).replace(/\//g, '/'),
+              time: date.toLocaleTimeString('ja-JP', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+              }) + '.' + String(date.getMilliseconds()).padStart(3, '0'),
+              content: setting.content || `${setting.changeType}: ${JSON.stringify(setting.value)}`
+            };
+          }),
+          personality: personality.map(item => {
+            const date = item.timestamp ? new Date(item.timestamp) : new Date();
+            return {
+              date: date.toLocaleDateString('ja-JP', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+              }).replace(/\//g, '/'),
+              time: date.toLocaleTimeString('ja-JP', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false
+              }) + '.' + String(date.getMilliseconds()).padStart(3, '0'),
+              content: item.content || `${item.biasType}: ${item.biasValue && item.biasValue.level ? item.biasValue.level : JSON.stringify(item.biasValue)}`
+            };
+          })
         };
       }));
 
       return readings;
     } catch (error) {
-      console.error('Error in getLatestReadings:', error);
+      logger.error('Error in getLatestReadings:', error);
       throw error;
     }
   }

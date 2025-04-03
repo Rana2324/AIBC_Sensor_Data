@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 import viewRoutes from './routes/viewRoutes.js';
 import apiRoutes from './routes/apiRoutes.js';
 import * as socketService from './services/socketService.js';
+import * as apiService from './services/apiService.js'; // Import the API service
 import { connectDB } from './config/db.js';
 import logger from './config/logger.js';
 import { 
@@ -34,38 +35,53 @@ const port = process.env.PORT || 3000;
 socketService.initSocket(io);
 
 // Connect to MongoDB
-connectDB().catch(err => {
-  logger.error('MongoDB connection error:', err);
-  process.exit(1);
-});
+connectDB()
+  .then(() => logger.info('MongoDB connected'))
+  .catch(err => {
+    logger.error('Failed to connect to MongoDB:', err);
+    process.exit(1);
+  });
 
-// Apply HTTP request logging middleware
+// Setup middleware
 app.use(httpLogger);
-
-// Set EJS as the template engine
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
-app.use(expressLayouts);
-app.set('layout', 'layout');
-
-// Serve static files
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Parse JSON bodies
-app.use(express.json());
+// Set up EJS
+app.use(expressLayouts);
+app.set('view engine', 'ejs');
+app.set('layout', 'layout');
+app.set('views', path.join(__dirname, 'views'));
 
-// Use routes
+// Routes
 app.use('/', viewRoutes);
 app.use('/api', apiRoutes);
 
-// Handle 404s
-app.use(notFoundHandler);
-
 // Error handling middleware
+app.use(notFoundHandler);
 app.use(errorLogger);
 app.use(errorHandler);
 
 // Start server
 server.listen(port, () => {
-  logger.info(`Server running at http://localhost:${port}`);
+  logger.info(`Server started on port ${port}`);
+  
+  // Start polling the C API once the server is running
+  apiService.startPolling();
+  logger.info('Started polling the C API for sensor data');
+});
+
+// Handle graceful shutdown
+process.on('SIGINT', () => {
+  logger.info('SIGINT signal received: closing HTTP server');
+  
+  // Stop the API polling
+  apiService.stopPolling();
+  
+  // Close the HTTP server
+  server.close(() => {
+    logger.info('HTTP server closed');
+    process.exit(0);
+  });
 });

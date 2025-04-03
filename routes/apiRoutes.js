@@ -9,7 +9,7 @@ router.get('/sensor-data/:sensorId/latest', sensorController.getLatestDataBySens
 
 // History endpoints
 router.get('/alerts', sensorController.getAlerts);
-router.get('/settings', sensorController.getSettings);
-router.get('/personality', sensorController.getPersonalityData);
+// router.get('/settings', sensorController.getSettings);
+// router.get('/personality', sensorController.getPersonalityData);
 
 export default router;
